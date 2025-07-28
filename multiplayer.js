@@ -276,15 +276,38 @@ function proceedWithJoin(playerName, roomId) {
     saveBasicSession();
     
     console.log('Emitting join-room event with socket:', socket.id);
-    socket.emit('join-room', { roomId, playerName });
     
-    // Add a timeout to detect if join is not responding
+    // Check if we're immediately after a master reset
+    const masterResetFlag = sessionStorage.getItem('master-reset-performed');
+    const isAfterReset = masterResetFlag === 'true';
+    
+    if (isAfterReset && !socket.connected) {
+        console.log('Attempting join after master reset, waiting for reconnection...');
+        loginError.textContent = 'Reconnecting...';
+        
+        // Wait for socket to reconnect before proceeding
+        const checkConnection = () => {
+            if (socket.connected) {
+                console.log('Socket reconnected, proceeding with join...');
+                loginError.textContent = '';
+                socket.emit('join-room', { roomId, playerName });
+            } else {
+                setTimeout(checkConnection, 500);
+            }
+        };
+        checkConnection();
+    } else {
+        socket.emit('join-room', { roomId, playerName });
+    }
+    
+    // Add a timeout to detect if join is not responding (extended for post-reset scenarios)
+    const timeoutDelay = isAfterReset ? 8000 : 5000;
     setTimeout(() => {
         if (loginScreen.classList.contains('active')) {
             console.warn('Join game seems to be taking too long, still on login screen');
             loginError.textContent = 'Connection issue. Please try again.';
         }
-    }, 5000);
+    }, timeoutDelay);
 }
 
 // Socket event handlers
@@ -310,6 +333,8 @@ socket.on('game-state', (state) => {
         // If this is the first game state after joining, transition to game screen
         if (loginScreen.classList.contains('active')) {
             console.log('Transitioning to game screen');
+            // Clear any error messages since we successfully joined
+            if (loginError) loginError.textContent = '';
             loginScreen.classList.remove('active');
             gameScreen.classList.add('active');
             initGame();
@@ -482,8 +507,16 @@ socket.on('master-reset-complete', () => {
             if (!socket.connected) {
                 console.log('Socket not connected after master reset, forcing reconnection...');
                 socket.connect();
+                
+                // Clear any lingering error messages after reconnection
+                setTimeout(() => {
+                    if (loginError) loginError.textContent = '';
+                }, 1000);
+            } else {
+                // Clear error message if socket is already connected
+                if (loginError) loginError.textContent = '';
             }
-        }, 2000);
+        }, 1000); // Reduced delay from 2000ms to 1000ms
         
         alert('🔄 Master Reset Complete!\n\nAll players cleared.\nAll boards reset.\nServer cache cleared.\n\nYou can now start fresh!');
         
