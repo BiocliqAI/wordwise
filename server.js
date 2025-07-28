@@ -453,15 +453,30 @@ io.on('connection', (socket) => {
         console.log('✅ Persistent storage file deleted');
       }
       
-      // Disconnect all clients and notify them of the reset
+      // Clear all socket rooms and disconnect all clients
+      const sockets = io.sockets.sockets;
+      sockets.forEach((clientSocket) => {
+        // Clear socket properties
+        delete clientSocket.roomId;
+        delete clientSocket.playerName;
+        // Leave all rooms
+        clientSocket.rooms.forEach(room => {
+          if (room !== clientSocket.id) {
+            clientSocket.leave(room);
+          }
+        });
+      });
+      console.log('✅ All socket rooms cleared');
+      
+      // Notify all clients of the reset
       io.emit('master-reset-complete');
       console.log('✅ All clients notified of master reset');
       
       // Force disconnect all clients after a brief delay to ensure they receive the message
       setTimeout(() => {
         io.disconnectSockets();
-        console.log('✅ All clients disconnected');
-      }, 1000);
+        console.log('✅ All clients forcibly disconnected');
+      }, 1500);
       
       console.log('🔄 Master reset completed successfully');
       

@@ -57,6 +57,8 @@ function initGame() {
         console.log('Game board created');
         createKeyboard();
         console.log('Keyboard created');
+        // Ensure keyboard starts with clean colors
+        clearKeyboardColors();
         setupEventListeners();
         console.log('Event listeners set up');
     } catch (error) {
@@ -310,6 +312,10 @@ socket.on('game-started', (state) => {
     currentRow = 0;
     currentCol = 0;
     resetGameBtn.style.display = 'none';
+    
+    // Clear keyboard colors for new game
+    clearKeyboardColors();
+    
     showMessage('Game started!');
     updateUI();
 });
@@ -360,10 +366,15 @@ socket.on('master-reset-complete', () => {
     try {
         console.log('Master reset complete - clearing all local data');
         
-        // Clear all local storage
+        // Clear ALL storage completely
         localStorage.clear();
+        sessionStorage.clear();
         
-        // Reset game state
+        // Set persistent flag to prevent session restoration
+        sessionStorage.setItem('master-reset-performed', 'true');
+        sessionStorage.setItem('master-reset-timestamp', Date.now().toString());
+        
+        // Reset game state completely
         gameState = {
             roomId: null,
             playerName: null,
@@ -377,17 +388,39 @@ socket.on('master-reset-complete', () => {
         cleanupEventListeners();
         eventListenersSetup = false;
         
+        // Reset UI state
+        currentRow = 0;
+        currentCol = 0;
+        gameOver = false;
+        won = false;
+        
         // Force return to login screen
         gameScreen.classList.remove('active');
         loginScreen.classList.add('active');
         
-        // Clear login form
-        if (playerNameInput) playerNameInput.value = '';
-        if (roomIdInput) roomIdInput.value = '';
+        // Clear login form completely
+        if (playerNameInput) {
+            playerNameInput.value = '';
+            playerNameInput.blur();
+        }
+        if (roomIdInput) {
+            roomIdInput.value = '';
+            roomIdInput.blur();
+        }
         if (loginError) loginError.textContent = '';
         
-        // Set a flag to prevent automatic session restoration (after clearing)
-        sessionStorage.setItem('master-reset-performed', 'true');
+        // Clear any existing game board
+        const gameBoard = document.getElementById('game-board');
+        if (gameBoard) gameBoard.innerHTML = '';
+        
+        // Clear keyboard and its colors
+        const keyboardContainer = document.getElementById('keyboard-container');
+        if (keyboardContainer) {
+            keyboardContainer.innerHTML = '';
+        } else {
+            // If keyboard exists, just clear colors
+            clearKeyboardColors();
+        }
         
         // Force socket to reconnect after master reset
         setTimeout(() => {
@@ -395,7 +428,7 @@ socket.on('master-reset-complete', () => {
                 console.log('Socket not connected after master reset, forcing reconnection...');
                 socket.connect();
             }
-        }, 1500);
+        }, 2000);
         
         alert('🔄 Master Reset Complete!\n\nAll players cleared.\nAll boards reset.\nServer cache cleared.\n\nYou can now start fresh!');
         
@@ -494,9 +527,20 @@ function updateKeyboard(player) {
             }
         }
         
+        // Always set the state (or clear it if empty)
         if (state) {
             button.dataset.state = state;
+        } else {
+            button.removeAttribute('data-state');
         }
+    });
+}
+
+// Clear all keyboard colors
+function clearKeyboardColors() {
+    const keyboardButtons = document.querySelectorAll('#keyboard-container button');
+    keyboardButtons.forEach(button => {
+        button.removeAttribute('data-state');
     });
 }
 
@@ -660,10 +704,27 @@ function checkAndRestoreSession() {
     try {
         // Check if master reset was recently performed
         const masterResetFlag = sessionStorage.getItem('master-reset-performed');
+        const masterResetTimestamp = sessionStorage.getItem('master-reset-timestamp');
+        
         if (masterResetFlag === 'true') {
-            console.log('Master reset was performed, skipping session restoration');
-            sessionStorage.removeItem('master-reset-performed');
-            return false;
+            console.log('Master reset was performed, checking if still valid...');
+            
+            // Keep the flag for 1 hour after master reset to prevent any auto-login
+            if (masterResetTimestamp) {
+                const resetAge = Date.now() - parseInt(masterResetTimestamp);
+                if (resetAge < 60 * 60 * 1000) { // 1 hour
+                    console.log('Master reset still active, skipping session restoration');
+                    return false;
+                } else {
+                    console.log('Master reset expired, clearing flags');
+                    sessionStorage.removeItem('master-reset-performed');
+                    sessionStorage.removeItem('master-reset-timestamp');
+                }
+            } else {
+                // If no timestamp, skip session restoration to be safe
+                console.log('Master reset flag found without timestamp, skipping session restoration');
+                return false;
+            }
         }
         
         const savedSession = localStorage.getItem('wordle-session');
@@ -681,8 +742,6 @@ function checkAndRestoreSession() {
                 console.log('Session valid, restoring...');
                 gameState.playerName = session.playerName;
                 gameState.roomId = session.roomId;
-                
-                // Server will provide the complete game state
                 
                 // Wait for socket to connect before rejoining
                 if (socket.connected) {
