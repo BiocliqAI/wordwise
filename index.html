@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multiplayer Wordle</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+    <!-- Player Identification Screen -->
+    <div id="login-screen" class="screen active">
+        <div class="login-container">
+            <h1>Multiplayer Wordle</h1>
+            <p>Join a game room to play with up to 5 players!</p>
+            <form id="login-form">
+                <input type="text" id="player-name" placeholder="Enter your name" maxlength="20" required>
+                <input type="text" id="room-id" placeholder="Room ID (optional)" maxlength="10">
+                <button type="submit">Join Game</button>
+            </form>
+            <div id="login-error" class="error-message"></div>
+        </div>
+    </div>
+
+    <!-- Game Screen -->
+    <div id="game-screen" class="screen">
+        <div class="game-header">
+            <h1>Multiplayer Wordle</h1>
+            <div class="game-info">
+                <span id="room-id-display">Room: -</span>
+                <span id="player-count">Players: 1/5</span>
+                <button id="reset-game-btn" class="btn" style="display: none;">New Game</button>
+            </div>
+        </div>
+
+        <div class="game-container">
+            <!-- Main Game Board -->
+            <div class="main-game">
+                <div id="game-board"></div>
+                <div id="keyboard-container"></div>
+                <div id="message" class="message"></div>
+            </div>
+
+            <!-- Players Panel -->
+            <div class="players-panel">
+                <h3>Players</h3>
+                <div id="players-list"></div>
+            </div>
+        </div>
+
+        <!-- Game Over Modal -->
+        <div id="game-over-modal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <h2 id="game-over-title">Game Over</h2>
+                <p id="game-over-message"></p>
+                <button id="play-again-btn" class="btn">Play Again</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="words.js"></script>
+    <script src="multiplayer.js"></script>
+</body>
+</html>
