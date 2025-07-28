@@ -102,7 +102,18 @@ function createKeyboard() {
         
         row.forEach(key => {
             const button = document.createElement('button');
-            button.textContent = key;
+            
+            // Use symbols for special keys to save space
+            if (key === 'Backspace') {
+                button.textContent = '⌫';
+                button.setAttribute('aria-label', 'Backspace');
+            } else if (key === 'Enter') {
+                button.textContent = '↵';
+                button.setAttribute('aria-label', 'Enter');
+            } else {
+                button.textContent = key;
+            }
+            
             button.dataset.key = key.toLowerCase();
             
             if (key === 'Enter' || key === 'Backspace') {
