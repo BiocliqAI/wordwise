@@ -13,7 +13,7 @@ const io = socketIo(server, {
   }
 });
 
-const PORT = 5002;
+const PORT = process.env.PORT || 5002;
 
 // Serve static files
 app.use(express.static(path.join(__dirname)));
