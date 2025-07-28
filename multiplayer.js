@@ -127,8 +127,19 @@ function createKeyboard() {
     });
 }
 
+// Track if event listeners have been set up
+let eventListenersSetup = false;
+
 // Setup event listeners
 function setupEventListeners() {
+    if (eventListenersSetup) {
+        console.log('Event listeners already set up, skipping...');
+        return;
+    }
+    
+    console.log('Setting up event listeners...');
+    eventListenersSetup = true;
+    
     // Keyboard events
     document.addEventListener('keydown', handleKeyPress);
     
@@ -175,6 +186,8 @@ function joinGame() {
     const roomId = roomIdInput.value.trim() || 'default';
     
     console.log('Attempting to join game:', { playerName, roomId });
+    console.log('Socket connected:', socket.connected);
+    console.log('Socket ID:', socket.id);
     
     if (!playerName) {
         loginError.textContent = 'Please enter your name';
@@ -186,14 +199,50 @@ function joinGame() {
         return;
     }
     
+    // Check if socket is connected, if not, wait for connection
+    if (!socket.connected) {
+        console.log('Socket not connected, attempting to connect...');
+        loginError.textContent = 'Connecting...';
+        
+        socket.connect();
+        
+        // Wait for connection before proceeding
+        socket.on('connect', () => {
+            console.log('Socket connected, now joining game...');
+            loginError.textContent = '';
+            proceedWithJoin(playerName, roomId);
+        });
+        
+        // Timeout if connection fails
+        setTimeout(() => {
+            if (!socket.connected) {
+                loginError.textContent = 'Connection failed. Please refresh and try again.';
+            }
+        }, 5000);
+        
+        return;
+    }
+    
+    proceedWithJoin(playerName, roomId);
+}
+
+function proceedWithJoin(playerName, roomId) {
     gameState.playerName = playerName;
     gameState.roomId = roomId;
     
     // Save basic session for future restoration
     saveBasicSession();
     
-    console.log('Emitting join-room event');
+    console.log('Emitting join-room event with socket:', socket.id);
     socket.emit('join-room', { roomId, playerName });
+    
+    // Add a timeout to detect if join is not responding
+    setTimeout(() => {
+        if (loginScreen.classList.contains('active')) {
+            console.warn('Join game seems to be taking too long, still on login screen');
+            loginError.textContent = 'Connection issue. Please try again.';
+        }
+    }, 5000);
 }
 
 // Socket event handlers
@@ -301,6 +350,9 @@ socket.on('master-reset-complete', () => {
             currentWord: null
         };
         
+        // Reset event listeners flag so they can be set up again
+        eventListenersSetup = false;
+        
         // Force return to login screen
         gameScreen.classList.remove('active');
         loginScreen.classList.add('active');
@@ -309,6 +361,17 @@ socket.on('master-reset-complete', () => {
         if (playerNameInput) playerNameInput.value = '';
         if (roomIdInput) roomIdInput.value = '';
         if (loginError) loginError.textContent = '';
+        
+        // Set a flag to prevent automatic session restoration (after clearing)
+        sessionStorage.setItem('master-reset-performed', 'true');
+        
+        // Force socket to reconnect after master reset
+        setTimeout(() => {
+            if (!socket.connected) {
+                console.log('Socket not connected after master reset, forcing reconnection...');
+                socket.connect();
+            }
+        }, 1500);
         
         alert('🔄 Master Reset Complete!\n\nAll players cleared.\nAll boards reset.\nServer cache cleared.\n\nYou can now start fresh!');
         
@@ -570,6 +633,14 @@ document.addEventListener('DOMContentLoaded', () => {
 function checkAndRestoreSession() {
     console.log('Checking for existing session...');
     try {
+        // Check if master reset was recently performed
+        const masterResetFlag = sessionStorage.getItem('master-reset-performed');
+        if (masterResetFlag === 'true') {
+            console.log('Master reset was performed, skipping session restoration');
+            sessionStorage.removeItem('master-reset-performed');
+            return false;
+        }
+        
         const savedSession = localStorage.getItem('wordle-session');
         console.log('Raw localStorage data:', savedSession);
         
