@@ -36,6 +36,7 @@ const roomIdInput = document.getElementById('room-id');
 const loginError = document.getElementById('login-error');
 const roomIdDisplay = document.getElementById('room-id-display');
 const playerCount = document.getElementById('player-count');
+const playerNameDisplay = document.getElementById('player-name-display');
 const resetGameBtn = document.getElementById('reset-game-btn');
 const gameOverModal = document.getElementById('game-over-modal');
 const gameOverTitle = document.getElementById('game-over-title');
@@ -408,6 +409,7 @@ function updateUI() {
     // Update room info
     roomIdDisplay.textContent = `Room: ${gameState.roomId}`;
     playerCount.textContent = `Players: ${gameState.playerCount || 1}/5`;
+    playerNameDisplay.textContent = `Player: ${gameState.playerName || '-'}`;
     
     // Update game board
     updateGameBoard();
