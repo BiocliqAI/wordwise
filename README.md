@@ -162,4 +162,4 @@ This project is open source and available under the [MIT License](LICENSE).
 
 🎮 **Enjoy playing Multiplayer Wordle with friends!** 
 
-*Built with ❤️ using Node.js and Socket.IO*
+*Built with ❤️ using Node.js and Socket.IO*# Railway deployment trigger
