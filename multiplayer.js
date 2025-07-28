@@ -127,7 +127,9 @@ function createKeyboard() {
     });
 }
 
-// Track if event listeners have been set up
+// Track event listener references for cleanup
+let keydownListener = null;
+let keyboardClickListener = null;
 let eventListenersSetup = false;
 
 // Setup event listeners
@@ -140,11 +142,15 @@ function setupEventListeners() {
     console.log('Setting up event listeners...');
     eventListenersSetup = true;
     
+    // Remove existing listeners first
+    cleanupEventListeners();
+    
     // Keyboard events
-    document.addEventListener('keydown', handleKeyPress);
+    keydownListener = handleKeyPress;
+    document.addEventListener('keydown', keydownListener);
     
     // Keyboard click events
-    document.getElementById('keyboard-container').addEventListener('click', (e) => {
+    keyboardClickListener = (e) => {
         if (e.target.tagName === 'BUTTON') {
             const key = e.target.dataset.key;
             if (key === 'enter') {
@@ -155,7 +161,8 @@ function setupEventListeners() {
                 handleLetter(key);
             }
         }
-    });
+    };
+    document.getElementById('keyboard-container').addEventListener('click', keyboardClickListener);
 
     // Reset game button
     resetGameBtn.addEventListener('click', () => {
@@ -177,6 +184,21 @@ function setupEventListeners() {
                 socket.emit('master-reset');
             }
         });
+    }
+}
+
+// Cleanup event listeners
+function cleanupEventListeners() {
+    if (keydownListener) {
+        document.removeEventListener('keydown', keydownListener);
+        keydownListener = null;
+    }
+    if (keyboardClickListener) {
+        const keyboardContainer = document.getElementById('keyboard-container');
+        if (keyboardContainer) {
+            keyboardContainer.removeEventListener('click', keyboardClickListener);
+        }
+        keyboardClickListener = null;
     }
 }
 
@@ -350,7 +372,8 @@ socket.on('master-reset-complete', () => {
             currentWord: null
         };
         
-        // Reset event listeners flag so they can be set up again
+        // Clean up existing event listeners and reset flag
+        cleanupEventListeners();
         eventListenersSetup = false;
         
         // Force return to login screen
