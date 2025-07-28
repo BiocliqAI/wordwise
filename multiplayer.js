@@ -48,6 +48,9 @@ let currentCol = 0;
 let gameOver = false;
 let won = false;
 
+// Flag to restore local board state after reconnect
+let pendingLocalRestore = false;
+
 // Initialize game
 function initGame() {
     try {
@@ -198,8 +201,13 @@ socket.on('game-state', (state) => {
             gameScreen.classList.add('active');
             initGame();
         }
-        
+
         updateUI();
+
+        if (pendingLocalRestore) {
+            restoreLocalGameState();
+            pendingLocalRestore = false;
+        }
         
         // Save basic session info only (server handles game state)
         if (gameState.playerName && gameState.roomId) {
@@ -266,6 +274,11 @@ socket.on('rejoin-success', (state) => {
         // Initialize the game
         initGame();
         updateUI();
+
+        if (pendingLocalRestore) {
+            restoreLocalGameState();
+            pendingLocalRestore = false;
+        }
         
         console.log('Successfully restored to game screen');
     } catch (error) {
@@ -509,7 +522,12 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('Player name input found:', !!playerNameInput);
     console.log('Socket.IO loaded:', typeof io !== 'undefined');
     console.log('Socket connected:', socket.connected);
-    
+
+    // If local game state exists, mark for restoration
+    if (localStorage.getItem('wordle-game-state')) {
+        pendingLocalRestore = true;
+    }
+
     // Check for existing session and restore if found
     checkAndRestoreSession();
     
@@ -634,6 +652,23 @@ function extractKeyboardState() {
     return keyboardState;
 }
 
+// Save local game state to localStorage so a refresh can restore typing
+function saveLocalGameState() {
+    try {
+        const state = {
+            gameBoard: extractCurrentGameBoard(),
+            keyboardState: extractKeyboardState(),
+            currentRow,
+            currentCol,
+            gameOver,
+            won
+        };
+        localStorage.setItem('wordle-game-state', JSON.stringify(state));
+    } catch (error) {
+        console.error('Error saving local game state:', error);
+    }
+}
+
 // Restore local game state from localStorage
 function restoreLocalGameState() {
     try {
@@ -726,3 +761,6 @@ function setupLoginEventListeners() {
         });
     }
 }
+
+// Persist any in-progress input before the page unloads
+window.addEventListener('beforeunload', saveLocalGameState);
