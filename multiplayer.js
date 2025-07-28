@@ -156,6 +156,17 @@ function setupEventListeners() {
         gameOverModal.style.display = 'none';
         socket.emit('reset-game');
     });
+
+    // Master reset button
+    const masterResetBtn = document.getElementById('master-reset-btn');
+    if (masterResetBtn) {
+        masterResetBtn.addEventListener('click', () => {
+            if (confirm('🚨 MASTER RESET 🚨\n\nThis will:\n• Clear ALL players from ALL rooms\n• Reset ALL game boards\n• Clear server cache\n• Start completely fresh\n\nAre you sure you want to continue?')) {
+                console.log('Master reset initiated by user');
+                socket.emit('master-reset');
+            }
+        });
+    }
 }
 
 // Join game
@@ -270,6 +281,39 @@ socket.on('rejoin-success', (state) => {
         console.log('Successfully restored to game screen');
     } catch (error) {
         console.error('Error handling rejoin-success:', error);
+    }
+});
+
+socket.on('master-reset-complete', () => {
+    try {
+        console.log('Master reset complete - clearing all local data');
+        
+        // Clear all local storage
+        localStorage.clear();
+        
+        // Reset game state
+        gameState = {
+            roomId: null,
+            playerName: null,
+            players: {},
+            gameActive: false,
+            winner: null,
+            currentWord: null
+        };
+        
+        // Force return to login screen
+        gameScreen.classList.remove('active');
+        loginScreen.classList.add('active');
+        
+        // Clear login form
+        if (playerNameInput) playerNameInput.value = '';
+        if (roomIdInput) roomIdInput.value = '';
+        if (loginError) loginError.textContent = '';
+        
+        alert('🔄 Master Reset Complete!\n\nAll players cleared.\nAll boards reset.\nServer cache cleared.\n\nYou can now start fresh!');
+        
+    } catch (error) {
+        console.error('Error handling master-reset-complete:', error);
     }
 });
 

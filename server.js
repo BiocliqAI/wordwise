@@ -40,73 +40,6 @@ console.log('FINAL_VALID_GUESSES loaded:', FINAL_VALID_GUESSES?.length || 0);
 const gameRooms = new Map();
 const MAX_PLAYERS = 5;
 
-// Load saved rooms on server start
-function loadSavedRooms() {
-  try {
-    const fs = require('fs');
-    if (fs.existsSync('game-rooms.json')) {
-      const savedData = JSON.parse(fs.readFileSync('game-rooms.json', 'utf8'));
-      console.log('Loading saved game rooms:', Object.keys(savedData));
-      
-      Object.entries(savedData).forEach(([roomId, roomData]) => {
-        const room = new GameRoom(roomId);
-        room.currentWord = roomData.currentWord;
-        room.gameActive = roomData.gameActive;
-        room.winner = roomData.winner;
-        room.startTime = roomData.startTime;
-        
-        // Restore players
-        Object.entries(roomData.players).forEach(([socketId, playerData]) => {
-          room.players.set(socketId, { ...playerData, connected: false });
-        });
-        
-        gameRooms.set(roomId, room);
-      });
-    }
-  } catch (error) {
-    console.error('Error loading saved rooms:', error);
-  }
-}
-
-// Save rooms to file
-function saveRoomsToFile() {
-  try {
-    const fs = require('fs');
-    const roomsData = {};
-    
-    gameRooms.forEach((room, roomId) => {
-      const players = {};
-      room.players.forEach((player, socketId) => {
-        players[socketId] = {
-          name: player.name,
-          board: player.board,
-          colors: player.colors,
-          currentRow: player.currentRow,
-          currentCol: player.currentCol,
-          gameOver: player.gameOver,
-          won: player.won
-        };
-      });
-      
-      roomsData[roomId] = {
-        currentWord: room.currentWord,
-        gameActive: room.gameActive,
-        winner: room.winner,
-        startTime: room.startTime,
-        players: players
-      };
-    });
-    
-    fs.writeFileSync('game-rooms.json', JSON.stringify(roomsData, null, 2));
-    console.log('Game rooms saved to file');
-  } catch (error) {
-    console.error('Error saving rooms:', error);
-  }
-}
-
-// Load saved rooms on startup
-loadSavedRooms();
-
 class GameRoom {
   constructor(roomId) {
     this.roomId = roomId;
@@ -272,6 +205,73 @@ class GameRoom {
   }
 }
 
+// Load saved rooms on server start
+function loadSavedRooms() {
+  try {
+    const fs = require('fs');
+    if (fs.existsSync('game-rooms.json')) {
+      const savedData = JSON.parse(fs.readFileSync('game-rooms.json', 'utf8'));
+      console.log('Loading saved game rooms:', Object.keys(savedData));
+      
+      Object.entries(savedData).forEach(([roomId, roomData]) => {
+        const room = new GameRoom(roomId);
+        room.currentWord = roomData.currentWord;
+        room.gameActive = roomData.gameActive;
+        room.winner = roomData.winner;
+        room.startTime = roomData.startTime;
+        
+        // Restore players
+        Object.entries(roomData.players).forEach(([socketId, playerData]) => {
+          room.players.set(socketId, { ...playerData, connected: false });
+        });
+        
+        gameRooms.set(roomId, room);
+      });
+    }
+  } catch (error) {
+    console.error('Error loading saved rooms:', error);
+  }
+}
+
+// Save rooms to file
+function saveRoomsToFile() {
+  try {
+    const fs = require('fs');
+    const roomsData = {};
+    
+    gameRooms.forEach((room, roomId) => {
+      const players = {};
+      room.players.forEach((player, socketId) => {
+        players[socketId] = {
+          name: player.name,
+          board: player.board,
+          colors: player.colors,
+          currentRow: player.currentRow,
+          currentCol: player.currentCol,
+          gameOver: player.gameOver,
+          won: player.won
+        };
+      });
+      
+      roomsData[roomId] = {
+        currentWord: room.currentWord,
+        gameActive: room.gameActive,
+        winner: room.winner,
+        startTime: room.startTime,
+        players: players
+      };
+    });
+    
+    fs.writeFileSync('game-rooms.json', JSON.stringify(roomsData, null, 2));
+    console.log('Game rooms saved to file');
+  } catch (error) {
+    console.error('Error saving rooms:', error);
+  }
+}
+
+// Load saved rooms on startup
+loadSavedRooms();
+
 // Socket.IO connection handling
 io.on('connection', (socket) => {
   console.log('New client connected:', socket.id);
@@ -435,6 +435,39 @@ io.on('connection', (socket) => {
     if (room && room.players.size >= 1) {
       room.resetGame(true); // Generate new word for manual reset
       io.to(socket.roomId).emit('game-started', room.getGameState());
+    }
+  });
+
+  socket.on('master-reset', () => {
+    console.log('🔄 Master reset initiated by:', socket.id);
+    
+    try {
+      // Clear all game rooms from memory
+      gameRooms.clear();
+      console.log('✅ All game rooms cleared from memory');
+      
+      // Delete the persistent storage file
+      const fs = require('fs');
+      if (fs.existsSync('game-rooms.json')) {
+        fs.unlinkSync('game-rooms.json');
+        console.log('✅ Persistent storage file deleted');
+      }
+      
+      // Disconnect all clients and notify them of the reset
+      io.emit('master-reset-complete');
+      console.log('✅ All clients notified of master reset');
+      
+      // Force disconnect all clients after a brief delay to ensure they receive the message
+      setTimeout(() => {
+        io.disconnectSockets();
+        console.log('✅ All clients disconnected');
+      }, 1000);
+      
+      console.log('🔄 Master reset completed successfully');
+      
+    } catch (error) {
+      console.error('❌ Error during master reset:', error);
+      socket.emit('master-reset-error', 'Reset failed: ' + error.message);
     }
   });
 
