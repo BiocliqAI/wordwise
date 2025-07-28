@@ -133,7 +133,9 @@ function createKeyboard() {
 // Track event listener references for cleanup
 let keydownListener = null;
 let keyboardClickListener = null;
+let masterResetListener = null;
 let eventListenersSetup = false;
+let masterResetInProgress = false;
 
 // Setup event listeners
 function setupEventListeners() {
@@ -178,15 +180,23 @@ function setupEventListeners() {
         socket.emit('reset-game');
     });
 
-    // Master reset button
+    // Master reset button - prevent duplicate listeners
     const masterResetBtn = document.getElementById('master-reset-btn');
-    if (masterResetBtn) {
-        masterResetBtn.addEventListener('click', () => {
+    if (masterResetBtn && !masterResetListener) {
+        masterResetListener = () => {
+            // Prevent multiple simultaneous resets
+            if (masterResetInProgress) {
+                console.log('Master reset already in progress, ignoring duplicate request');
+                return;
+            }
+            
             if (confirm('🚨 MASTER RESET 🚨\n\nThis will:\n• Clear ALL players from ALL rooms\n• Reset ALL game boards\n• Clear server cache\n• Start completely fresh\n\nAre you sure you want to continue?')) {
                 console.log('Master reset initiated by user');
+                masterResetInProgress = true;
                 socket.emit('master-reset');
             }
-        });
+        };
+        masterResetBtn.addEventListener('click', masterResetListener);
     }
 }
 
@@ -202,6 +212,13 @@ function cleanupEventListeners() {
             keyboardContainer.removeEventListener('click', keyboardClickListener);
         }
         keyboardClickListener = null;
+    }
+    if (masterResetListener) {
+        const masterResetBtn = document.getElementById('master-reset-btn');
+        if (masterResetBtn) {
+            masterResetBtn.removeEventListener('click', masterResetListener);
+        }
+        masterResetListener = null;
     }
 }
 
@@ -421,9 +438,10 @@ socket.on('master-reset-complete', () => {
             currentWord: null
         };
         
-        // Clean up existing event listeners and reset flag
+        // Clean up existing event listeners and reset flags
         cleanupEventListeners();
         eventListenersSetup = false;
+        masterResetInProgress = false;
         
         // Reset UI state
         currentRow = 0;
