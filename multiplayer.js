@@ -274,7 +274,21 @@ function proceedWithJoin(playerName, roomId) {
 socket.on('game-state', (state) => {
     try {
         console.log('Received game-state:', state);
+        
+        // Preserve current player name before merging state
+        const currentPlayerName = gameState.playerName;
         gameState = { ...gameState, ...state };
+        
+        // Extract player name from server data if available, otherwise preserve current
+        const currentPlayer = state.players?.[socket.id];
+        if (currentPlayer?.name) {
+            gameState.playerName = currentPlayer.name;
+        } else if (currentPlayerName) {
+            // Preserve the player name if server data doesn't have it
+            gameState.playerName = currentPlayerName;
+        }
+        
+        console.log('Updated gameState.playerName:', gameState.playerName);
         
         // If this is the first game state after joining, transition to game screen
         if (loginScreen.classList.contains('active')) {
@@ -346,7 +360,21 @@ socket.on('invalid-guess', (reason) => {
 socket.on('rejoin-success', (state) => {
     try {
         console.log('Rejoin successful! Received state:', state);
+        
+        // Preserve current player name before merging state
+        const currentPlayerName = gameState.playerName;
         gameState = { ...gameState, ...state };
+        
+        // Extract player name from server data if available, otherwise preserve current
+        const currentPlayer = state.players?.[socket.id];
+        if (currentPlayer?.name) {
+            gameState.playerName = currentPlayer.name;
+        } else if (currentPlayerName) {
+            // Preserve the player name if server data doesn't have it
+            gameState.playerName = currentPlayerName;
+        }
+        
+        console.log('Rejoin - Updated gameState.playerName:', gameState.playerName);
         
         // Force transition to game screen
         loginScreen.classList.remove('active');
@@ -373,6 +401,15 @@ socket.on('master-reset-complete', () => {
         // Set persistent flag to prevent session restoration
         sessionStorage.setItem('master-reset-performed', 'true');
         sessionStorage.setItem('master-reset-timestamp', Date.now().toString());
+        
+        // Double-check: explicitly remove any session data that might persist
+        localStorage.removeItem('wordle-session');
+        localStorage.removeItem('wordle-game-state');
+        
+        console.log('Master reset flags set:', {
+            flag: sessionStorage.getItem('master-reset-performed'),
+            timestamp: sessionStorage.getItem('master-reset-timestamp')
+        });
         
         // Reset game state completely
         gameState = {
@@ -700,29 +737,39 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Check and restore session from localStorage
 function checkAndRestoreSession() {
+    console.log('=== SESSION RESTORATION CHECK ===');
     console.log('Checking for existing session...');
     try {
         // Check if master reset was recently performed
         const masterResetFlag = sessionStorage.getItem('master-reset-performed');
         const masterResetTimestamp = sessionStorage.getItem('master-reset-timestamp');
         
+        console.log('Master reset check:', {
+            flag: masterResetFlag,
+            timestamp: masterResetTimestamp,
+            currentTime: Date.now()
+        });
+        
         if (masterResetFlag === 'true') {
             console.log('Master reset was performed, checking if still valid...');
             
-            // Keep the flag for 1 hour after master reset to prevent any auto-login
+            // Keep the flag for 24 hours after master reset to prevent any auto-login
             if (masterResetTimestamp) {
                 const resetAge = Date.now() - parseInt(masterResetTimestamp);
-                if (resetAge < 60 * 60 * 1000) { // 1 hour
-                    console.log('Master reset still active, skipping session restoration');
+                const resetAgeHours = resetAge / (1000 * 60 * 60);
+                console.log(`Master reset age: ${resetAgeHours.toFixed(2)} hours`);
+                
+                if (resetAge < 24 * 60 * 60 * 1000) { // 24 hours
+                    console.log('Master reset still active (within 24 hours), skipping session restoration');
                     return false;
                 } else {
-                    console.log('Master reset expired, clearing flags');
+                    console.log('Master reset expired after 24 hours, clearing flags');
                     sessionStorage.removeItem('master-reset-performed');
                     sessionStorage.removeItem('master-reset-timestamp');
                 }
             } else {
                 // If no timestamp, skip session restoration to be safe
-                console.log('Master reset flag found without timestamp, skipping session restoration');
+                console.log('Master reset flag found without timestamp, skipping session restoration for safety');
                 return false;
             }
         }
@@ -774,6 +821,16 @@ function checkAndRestoreSession() {
     }
     return false;
 }
+
+// Function to manually clear master reset flags (for debugging)
+function clearMasterResetFlags() {
+    sessionStorage.removeItem('master-reset-performed');
+    sessionStorage.removeItem('master-reset-timestamp');
+    console.log('Master reset flags manually cleared');
+}
+
+// Make function available globally for debugging
+window.clearMasterResetFlags = clearMasterResetFlags;
 
 // Save basic session to localStorage (server handles game state)
 function saveBasicSession() {
