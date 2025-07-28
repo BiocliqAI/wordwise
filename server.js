@@ -15,6 +15,16 @@ const io = socketIo(server, {
 
 const PORT = process.env.PORT || 5002;
 
+// Add no-cache headers to prevent browser caching
+app.use((req, res, next) => {
+  res.set({
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0'
+  });
+  next();
+});
+
 // Serve static files
 app.use(express.static(path.join(__dirname)));
 app.use(cors());
