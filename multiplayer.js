@@ -42,6 +42,9 @@ const gameOverModal = document.getElementById('game-over-modal');
 const gameOverTitle = document.getElementById('game-over-title');
 const gameOverMessage = document.getElementById('game-over-message');
 const playAgainBtn = document.getElementById('play-again-btn');
+const chatMessages = document.getElementById('chat-messages');
+const chatForm = document.getElementById('chat-form');
+const chatInput = document.getElementById('chat-input');
 
 // Game variables
 let currentRow = 0;
@@ -134,6 +137,7 @@ function createKeyboard() {
 let keydownListener = null;
 let keyboardClickListener = null;
 let masterResetListener = null;
+let chatSubmitListener = null;
 let eventListenersSetup = false;
 let masterResetInProgress = false;
 
@@ -180,6 +184,19 @@ function setupEventListeners() {
         socket.emit('reset-game');
     });
 
+    // Chat form
+    if (chatForm) {
+        chatSubmitListener = (e) => {
+            e.preventDefault();
+            const msg = chatInput.value.trim();
+            if (msg) {
+                socket.emit('chat-message', { message: msg });
+                chatInput.value = '';
+            }
+        };
+        chatForm.addEventListener('submit', chatSubmitListener);
+    }
+
     // Master reset button - prevent duplicate listeners
     const masterResetBtn = document.getElementById('master-reset-btn');
     if (masterResetBtn && !masterResetListener) {
@@ -219,6 +236,12 @@ function cleanupEventListeners() {
             masterResetBtn.removeEventListener('click', masterResetListener);
         }
         masterResetListener = null;
+    }
+    if (chatSubmitListener) {
+        if (chatForm) {
+            chatForm.removeEventListener('submit', chatSubmitListener);
+        }
+        chatSubmitListener = null;
     }
 }
 
@@ -327,7 +350,19 @@ socket.on('game-state', (state) => {
             // Preserve the player name if server data doesn't have it
             gameState.playerName = currentPlayerName;
         }
-        
+
+        if (state.chatHistory) {
+            renderChatHistory(state.chatHistory);
+        }
+
+        if (state.chatHistory) {
+            renderChatHistory(state.chatHistory);
+        }
+
+        if (state.chatHistory) {
+            renderChatHistory(state.chatHistory);
+        }
+
         console.log('Updated gameState.playerName:', gameState.playerName);
         
         // If this is the first game state after joining, transition to game screen
@@ -399,6 +434,10 @@ socket.on('invalid-guess', (reason) => {
     showMessage(reason, 'error');
 });
 
+socket.on('chat-update', ({ playerName, message }) => {
+    appendChatMessage(playerName, message);
+});
+
 socket.on('rejoin-success', (state) => {
     try {
         console.log('Rejoin successful! Received state:', state);
@@ -415,7 +454,11 @@ socket.on('rejoin-success', (state) => {
             // Preserve the player name if server data doesn't have it
             gameState.playerName = currentPlayerName;
         }
-        
+
+        if (state.chatHistory) {
+            renderChatHistory(state.chatHistory);
+        }
+
         console.log('Rejoin - Updated gameState.playerName:', gameState.playerName);
         
         // Force transition to game screen
@@ -764,6 +807,23 @@ function showGameOverModal(title, message) {
     gameOverTitle.textContent = title;
     gameOverMessage.textContent = message;
     gameOverModal.style.display = 'flex';
+}
+
+function appendChatMessage(name, message) {
+    if (!chatMessages) return;
+    const div = document.createElement('div');
+    div.className = 'chat-message';
+    div.innerHTML = `<strong>${name}:</strong> ${message}`;
+    chatMessages.appendChild(div);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+function renderChatHistory(history = []) {
+    if (!chatMessages) return;
+    chatMessages.innerHTML = '';
+    history.forEach(({ playerName, message }) => {
+        appendChatMessage(playerName, message);
+    });
 }
 
 // Initialize
