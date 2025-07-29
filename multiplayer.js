@@ -743,6 +743,13 @@ function createPlayerCard(player, isCurrentPlayer) {
 
 // Handle key press
 function handleKeyPress(e) {
+    // Ignore key presses while typing in the chat box or other inputs
+    if (document.activeElement === chatInput ||
+        document.activeElement.tagName === 'INPUT' ||
+        document.activeElement.tagName === 'TEXTAREA') {
+        return;
+    }
+
     if (gameOver || !gameState.gameActive) return;
     
     const key = e.key.toLowerCase();
