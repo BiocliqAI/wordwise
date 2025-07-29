@@ -48,7 +48,6 @@ class GameRoom {
     this.gameActive = false;
     this.winner = null;
     this.startTime = null;
-    this.chatHistory = [];
   }
 
   getRandomWord() {
@@ -159,13 +158,6 @@ class GameRoom {
     return colors;
   }
 
-  addChatMessage(playerName, message) {
-    this.chatHistory.push({ playerName, message });
-    if (this.chatHistory.length > 50) {
-      this.chatHistory.shift();
-    }
-  }
-
   getGameState() {
     const playersState = {};
     this.players.forEach((player, socketId) => {
@@ -185,8 +177,7 @@ class GameRoom {
       gameActive: this.gameActive,
       winner: this.winner,
       currentWord: this.currentWord,
-      playerCount: this.players.size,
-      chatHistory: this.chatHistory
+      playerCount: this.players.size
     };
   }
 
@@ -228,7 +219,6 @@ function loadSavedRooms() {
         room.gameActive = roomData.gameActive;
         room.winner = roomData.winner;
         room.startTime = roomData.startTime;
-        room.chatHistory = roomData.chatHistory || [];
         
         // Restore players
         Object.entries(roomData.players).forEach(([socketId, playerData]) => {
@@ -269,7 +259,6 @@ function saveRoomsToFile() {
         winner: room.winner,
         startTime: room.startTime,
         players: players
-        ,chatHistory: room.chatHistory
       };
     });
     
@@ -439,15 +428,6 @@ io.on('connection', (socket) => {
     } else {
       socket.emit('invalid-guess', result.reason);
     }
-  });
-
-  socket.on('chat-message', ({ message }) => {
-    const room = gameRooms.get(socket.roomId);
-    if (!room) return;
-    const playerName = room.players.get(socket.id)?.name || 'Unknown';
-    room.addChatMessage(playerName, message);
-    io.to(socket.roomId).emit('chat-update', { playerName, message });
-    saveRoomsToFile();
   });
 
   socket.on('reset-game', () => {
