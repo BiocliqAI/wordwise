@@ -486,6 +486,45 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('chat-message', ({ message, playerName, roomId }) => {
+    console.log('Chat message received:', { message, playerName, roomId, socketId: socket.id });
+    
+    // Validate message
+    if (!message || !playerName || !roomId) {
+      console.log('Invalid chat message data');
+      return;
+    }
+    
+    // Validate message length
+    if (message.length > 100) {
+      console.log('Chat message too long');
+      return;
+    }
+    
+    // Check if socket is in the room
+    if (socket.roomId !== roomId) {
+      console.log('Socket not in specified room');
+      return;
+    }
+    
+    // Verify player exists in room
+    const room = gameRooms.get(roomId);
+    if (!room || !room.players.has(socket.id)) {
+      console.log('Player not found in room');
+      return;
+    }
+    
+    // Broadcast message to all players in the room
+    const chatData = {
+      message: message.trim(),
+      playerName: playerName,
+      timestamp: Date.now()
+    };
+    
+    io.to(roomId).emit('chat-message', chatData);
+    console.log('Chat message broadcasted to room:', roomId);
+  });
+
   socket.on('disconnect', () => {
     console.log('Client disconnected:', socket.id);
     

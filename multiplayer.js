@@ -43,6 +43,11 @@ const gameOverTitle = document.getElementById('game-over-title');
 const gameOverMessage = document.getElementById('game-over-message');
 const playAgainBtn = document.getElementById('play-again-btn');
 
+// Chat elements
+const chatMessages = document.getElementById('chat-messages');
+const chatInput = document.getElementById('chat-input');
+const chatSendBtn = document.getElementById('chat-send-btn');
+
 // Game variables
 let currentRow = 0;
 let currentCol = 0;
@@ -525,6 +530,11 @@ socket.on('master-reset-complete', () => {
     }
 });
 
+// Chat message received
+socket.on('chat-message', (data) => {
+    displayChatMessage(data);
+});
+
 // Update UI based on game state
 function updateUI() {
     // Update room info
@@ -700,6 +710,9 @@ function createPlayerCard(player, isCurrentPlayer) {
 
 // Handle key press
 function handleKeyPress(e) {
+    // Don't handle keystrokes if chat input is focused
+    if (e.target === chatInput) return;
+    
     if (gameOver || !gameState.gameActive) return;
     
     const key = e.key.toLowerCase();
@@ -766,6 +779,80 @@ function showGameOverModal(title, message) {
     gameOverModal.style.display = 'flex';
 }
 
+// Chat functionality
+function sendChatMessage() {
+    const message = chatInput.value.trim();
+    if (!message || !gameState.playerName || !gameState.roomId) return;
+    
+    // Send chat message to server
+    socket.emit('chat-message', {
+        message: message,
+        playerName: gameState.playerName,
+        roomId: gameState.roomId
+    });
+    
+    // Clear input
+    chatInput.value = '';
+}
+
+function displayChatMessage(data) {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'chat-message';
+    
+    // Mark own messages differently
+    if (data.playerName === gameState.playerName) {
+        messageDiv.classList.add('own-message');
+    }
+    
+    const senderSpan = document.createElement('span');
+    senderSpan.className = 'chat-sender';
+    senderSpan.textContent = data.playerName + ':';
+    
+    const textSpan = document.createElement('span');
+    textSpan.className = 'chat-text';
+    textSpan.textContent = data.message;
+    
+    messageDiv.appendChild(senderSpan);
+    messageDiv.appendChild(textSpan);
+    
+    chatMessages.appendChild(messageDiv);
+    
+    // Auto-scroll to bottom
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+    
+    // Limit chat history to 50 messages
+    const messages = chatMessages.children;
+    if (messages.length > 50) {
+        chatMessages.removeChild(messages[0]);
+    }
+}
+
+function setupChatEventListeners() {
+    // Send button click
+    if (chatSendBtn) {
+        chatSendBtn.addEventListener('click', sendChatMessage);
+    }
+    
+    // Enter key in chat input
+    if (chatInput) {
+        chatInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                sendChatMessage();
+            }
+        });
+        
+        // Prevent game keystrokes when chat is focused
+        chatInput.addEventListener('focus', () => {
+            console.log('Chat input focused - game keystrokes disabled');
+        });
+        
+        chatInput.addEventListener('blur', () => {
+            console.log('Chat input blurred - game keystrokes enabled');
+        });
+    }
+}
+
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     console.log('DOM loaded');
@@ -779,6 +866,9 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Set up login form listener immediately
     setupLoginEventListeners();
+    
+    // Set up chat event listeners
+    setupChatEventListeners();
     
     // Focus on name input
     if (playerNameInput) {
