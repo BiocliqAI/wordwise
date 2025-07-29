@@ -785,6 +785,18 @@ body {
     }
 }
 
+/* Confetti animation */
+@keyframes confettiFall {
+    0% {
+        transform: translateY(-10px) rotate(0deg);
+        opacity: 1;
+    }
+    100% {
+        transform: translateY(100vh) rotate(720deg);
+        opacity: 0;
+    }
+}
+
 /* Reduced motion support */
 @media (prefers-reduced-motion: reduce) {
     .board-tile,
@@ -797,5 +809,13 @@ body {
     
     .board-tile.flip {
         animation: none;
+    }
+    
+    /* Disable confetti animation for reduced motion */
+    @keyframes confettiFall {
+        0%, 100% {
+            transform: translateY(-10px) rotate(0deg);
+            opacity: 0;
+        }
     }
 }

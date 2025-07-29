@@ -48,6 +48,7 @@ class GameRoom {
     this.gameActive = false;
     this.winner = null;
     this.startTime = null;
+    this.playAgainRequested = false;
   }
 
   getRandomWord() {
@@ -193,6 +194,7 @@ class GameRoom {
     this.gameActive = true;
     this.winner = null;
     this.startTime = Date.now();
+    this.playAgainRequested = false; // Reset play again flag
 
     this.players.forEach(player => {
       player.board = Array(6).fill(null).map(() => Array(5).fill(''));
@@ -284,6 +286,32 @@ io.on('connection', (socket) => {
       console.log('Creating new room:', roomId);
       room = new GameRoom(roomId);
       gameRooms.set(roomId, room);
+    }
+
+    // Check if player name already exists in the room
+    let existingPlayerSocketId = null;
+    for (const [socketId, player] of room.players) {
+      if (player.name === playerName) {
+        existingPlayerSocketId = socketId;
+        break;
+      }
+    }
+
+    // If player name exists, kick out the existing player
+    if (existingPlayerSocketId) {
+      console.log(`Kicking out existing player with name "${playerName}" (socket: ${existingPlayerSocketId})`);
+      
+      // Get the existing socket and disconnect it
+      const existingSocket = io.sockets.sockets.get(existingPlayerSocketId);
+      if (existingSocket) {
+        existingSocket.emit('player-kicked', { 
+          reason: `Another player joined with your name "${playerName}"` 
+        });
+        existingSocket.disconnect(true);
+      }
+      
+      // Remove the existing player from the room
+      room.players.delete(existingPlayerSocketId);
     }
 
     if (room.addPlayer(socket.id, playerName)) {
@@ -433,6 +461,22 @@ io.on('connection', (socket) => {
   socket.on('reset-game', () => {
     const room = gameRooms.get(socket.roomId);
     if (room && room.players.size >= 1) {
+      // Check if play again was already requested
+      if (room.playAgainRequested) {
+        console.log('Play again already requested by another player, ignoring');
+        return;
+      }
+      
+      // Mark play again as requested
+      room.playAgainRequested = true;
+      const playerName = room.players.get(socket.id)?.name || 'Someone';
+      
+      // Notify all players who triggered the reset
+      io.to(socket.roomId).emit('play-again-triggered', { 
+        playerName: playerName 
+      });
+      
+      // Reset the game
       room.resetGame(true); // Generate new word for manual reset
       io.to(socket.roomId).emit('game-started', room.getGameState());
     }

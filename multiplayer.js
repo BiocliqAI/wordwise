@@ -381,8 +381,22 @@ socket.on('game-started', (state) => {
     updateUI();
 });
 
+socket.on('play-again-triggered', (data) => {
+    showMessage(`${data.playerName} started a new game!`, 'success');
+    
+    // Hide play again button from modal for all players
+    gameOverModal.style.display = 'none';
+});
+
 socket.on('game-ended', (data) => {
     gameOver = true;
+    
+    // Trigger confetti and win sound for all players when there's a winner
+    if (data.winner) {
+        createConfetti();
+        playWinSound();
+    }
+    
     if (data.winner === gameState.playerName) {
         showGameOverModal('Congratulations!', 'You won!');
     } else if (data.winner) {
@@ -533,6 +547,31 @@ socket.on('master-reset-complete', () => {
 // Chat message received
 socket.on('chat-message', (data) => {
     displayChatMessage(data);
+});
+
+// Player kicked event
+socket.on('player-kicked', (data) => {
+    alert(`⚠️ You have been disconnected!\n\n${data.reason}\n\nYou can rejoin with a different name.`);
+    
+    // Clear session and return to login
+    clearSession();
+    gameState = {
+        roomId: null,
+        playerName: null,
+        players: {},
+        gameActive: false,
+        winner: null,
+        currentWord: null
+    };
+    
+    // Return to login screen
+    gameScreen.classList.remove('active');
+    loginScreen.classList.add('active');
+    
+    // Clear login form
+    if (playerNameInput) playerNameInput.value = '';
+    if (roomIdInput) roomIdInput.value = '';
+    if (loginError) loginError.textContent = '';
 });
 
 // Update UI based on game state
@@ -802,6 +841,9 @@ function displayChatMessage(data) {
     // Mark own messages differently
     if (data.playerName === gameState.playerName) {
         messageDiv.classList.add('own-message');
+    } else {
+        // Play sound for other players' messages (not your own)
+        playChatSound();
     }
     
     const senderSpan = document.createElement('span');
@@ -825,6 +867,107 @@ function displayChatMessage(data) {
     if (messages.length > 50) {
         chatMessages.removeChild(messages[0]);
     }
+}
+
+// Sound effects functions
+function playChatSound() {
+    try {
+        // Create a simple beep sound using Web Audio API
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+        oscillator.type = 'sine';
+        
+        gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+        gainNode.gain.linearRampToValueAtTime(0.1, audioContext.currentTime + 0.01);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.2);
+        
+        oscillator.start(audioContext.currentTime);
+        oscillator.stop(audioContext.currentTime + 0.2);
+    } catch (error) {
+        console.log('Could not play chat sound:', error);
+    }
+}
+
+function playWinSound() {
+    try {
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        
+        // Play a celebratory melody
+        const frequencies = [523, 659, 784, 1047]; // C, E, G, C (major chord)
+        
+        frequencies.forEach((freq, index) => {
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.setValueAtTime(freq, audioContext.currentTime);
+            oscillator.type = 'triangle';
+            
+            const startTime = audioContext.currentTime + (index * 0.15);
+            const duration = 0.4;
+            
+            gainNode.gain.setValueAtTime(0, startTime);
+            gainNode.gain.linearRampToValueAtTime(0.15, startTime + 0.02);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+            
+            oscillator.start(startTime);
+            oscillator.stop(startTime + duration);
+        });
+    } catch (error) {
+        console.log('Could not play win sound:', error);
+    }
+}
+
+function createConfetti() {
+    // Create confetti container
+    const confettiContainer = document.createElement('div');
+    confettiContainer.id = 'confetti-container';
+    confettiContainer.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 9999;
+        overflow: hidden;
+    `;
+    document.body.appendChild(confettiContainer);
+    
+    // Generate confetti pieces
+    const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#ffeaa7', '#dda0dd', '#98d8c8'];
+    const confettiCount = 100;
+    
+    for (let i = 0; i < confettiCount; i++) {
+        const confettiPiece = document.createElement('div');
+        confettiPiece.style.cssText = `
+            position: absolute;
+            width: ${Math.random() * 10 + 5}px;
+            height: ${Math.random() * 10 + 5}px;
+            background-color: ${colors[Math.floor(Math.random() * colors.length)]};
+            left: ${Math.random() * 100}%;
+            top: -10px;
+            opacity: ${Math.random() * 0.8 + 0.2};
+            border-radius: ${Math.random() > 0.5 ? '50%' : '0'};
+            animation: confettiFall ${Math.random() * 3 + 2}s linear forwards;
+        `;
+        confettiContainer.appendChild(confettiPiece);
+    }
+    
+    // Remove confetti after animation
+    setTimeout(() => {
+        if (confettiContainer.parentNode) {
+            confettiContainer.parentNode.removeChild(confettiContainer);
+        }
+    }, 5000);
 }
 
 function setupChatEventListeners() {
