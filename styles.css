@@ -717,6 +717,16 @@ body {
     background-color: #5a9a54;
 }
 
+.leave-btn {
+    background-color: #ff6b6b;
+    margin-right: 10px;
+}
+
+.leave-btn:hover,
+.leave-btn:active {
+    background-color: #ff5252;
+}
+
 /* Animations */
 @keyframes pop {
     0% {

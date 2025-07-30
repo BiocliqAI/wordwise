@@ -32,12 +32,13 @@ const loginScreen = document.getElementById('login-screen');
 const gameScreen = document.getElementById('game-screen');
 const loginForm = document.getElementById('login-form');
 const playerNameInput = document.getElementById('player-name');
-const roomIdInput = document.getElementById('room-id');
+// Room ID input was removed - always use 'default' room
 const loginError = document.getElementById('login-error');
 const roomIdDisplay = document.getElementById('room-id-display');
 const playerCount = document.getElementById('player-count');
 const playerNameDisplay = document.getElementById('player-name-display');
 const resetGameBtn = document.getElementById('reset-game-btn');
+const leaveRoomBtn = document.getElementById('leave-room-btn');
 const gameOverModal = document.getElementById('game-over-modal');
 const gameOverTitle = document.getElementById('game-over-title');
 const gameOverMessage = document.getElementById('game-over-message');
@@ -179,6 +180,15 @@ function setupEventListeners() {
         socket.emit('reset-game');
     });
 
+    // Leave room button
+    if (leaveRoomBtn) {
+        leaveRoomBtn.addEventListener('click', () => {
+            if (confirm('Are you sure you want to leave the room?\n\nYou will return to the login screen.')) {
+                socket.emit('leave-room');
+            }
+        });
+    }
+
     // Play again button
     playAgainBtn.addEventListener('click', () => {
         gameOverModal.style.display = 'none';
@@ -230,7 +240,7 @@ function cleanupEventListeners() {
 // Join game
 function joinGame() {
     const playerName = playerNameInput.value.trim();
-    const roomId = roomIdInput.value.trim() || 'default';
+    const roomId = 'default'; // Always use default room now
     
     console.log('Attempting to join game:', { playerName, roomId });
     console.log('Socket connected:', socket.connected);
@@ -502,10 +512,6 @@ socket.on('master-reset-complete', () => {
             playerNameInput.value = '';
             playerNameInput.blur();
         }
-        if (roomIdInput) {
-            roomIdInput.value = '';
-            roomIdInput.blur();
-        }
         if (loginError) loginError.textContent = '';
         
         // Clear any existing game board
@@ -570,8 +576,33 @@ socket.on('player-kicked', (data) => {
     
     // Clear login form
     if (playerNameInput) playerNameInput.value = '';
-    if (roomIdInput) roomIdInput.value = '';
     if (loginError) loginError.textContent = '';
+});
+
+// Leave room event
+socket.on('left-room', () => {
+    console.log('Successfully left room');
+    
+    // Clear session and return to login
+    clearSession();
+    gameState = {
+        roomId: null,
+        playerName: null,
+        players: {},
+        gameActive: false,
+        winner: null,
+        currentWord: null
+    };
+    
+    // Return to login screen
+    gameScreen.classList.remove('active');
+    loginScreen.classList.add('active');
+    
+    // Clear login form
+    if (playerNameInput) playerNameInput.value = '';
+    if (loginError) loginError.textContent = '';
+    
+    showMessage('You have left the room', 'success');
 });
 
 // Update UI based on game state
@@ -1090,6 +1121,11 @@ function checkAndRestoreSession() {
                             playerName: session.playerName 
                         });
                     });
+                }
+                
+                // Pre-fill the name in case rejoin fails
+                if (playerNameInput) {
+                    playerNameInput.value = session.playerName;
                 }
                 return true;
             } else {

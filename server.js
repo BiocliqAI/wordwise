@@ -530,6 +530,40 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('leave-room', () => {
+    const room = gameRooms.get(socket.roomId);
+    if (room && socket.roomId) {
+      const playerName = room.players.get(socket.id)?.name;
+      console.log(`Player ${playerName} (${socket.id}) leaving room ${socket.roomId}`);
+      
+      // Remove player from room
+      room.removePlayer(socket.id);
+      
+      // Leave the socket room
+      socket.leave(socket.roomId);
+      
+      // Notify other players
+      if (playerName) {
+        io.to(socket.roomId).emit('player-left', {
+          playerName,
+          playerCount: room.players.size
+        });
+      }
+      
+      // Clear socket room data
+      delete socket.roomId;
+      delete socket.playerName;
+      
+      // Confirm to the leaving player
+      socket.emit('left-room');
+      
+      // Save updated room state
+      saveRoomsToFile();
+      
+      console.log(`Player ${playerName} successfully left room`);
+    }
+  });
+
   socket.on('chat-message', ({ message, playerName, roomId }) => {
     console.log('Chat message received:', { message, playerName, roomId, socketId: socket.id });
     
