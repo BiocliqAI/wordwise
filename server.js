@@ -536,8 +536,8 @@ io.on('connection', (socket) => {
       const playerName = room.players.get(socket.id)?.name;
       console.log(`Player ${playerName} (${socket.id}) leaving room ${socket.roomId}`);
       
-      // Remove player from room
-      room.removePlayer(socket.id);
+      // Completely delete the player from the room (not just mark as disconnected)
+      room.players.delete(socket.id);
       
       // Leave the socket room
       socket.leave(socket.roomId);
@@ -560,7 +560,7 @@ io.on('connection', (socket) => {
       // Save updated room state
       saveRoomsToFile();
       
-      console.log(`Player ${playerName} successfully left room`);
+      console.log(`Player ${playerName} successfully left room. Remaining players: ${room.players.size}`);
     }
   });
 

@@ -184,6 +184,9 @@ function setupEventListeners() {
     if (leaveRoomBtn) {
         leaveRoomBtn.addEventListener('click', () => {
             if (confirm('Are you sure you want to leave the room?\n\nYou will return to the login screen.')) {
+                // Set flag to prevent session restoration
+                sessionStorage.setItem('voluntarily-left-room', 'true');
+                sessionStorage.setItem('left-room-timestamp', Date.now().toString());
                 socket.emit('leave-room');
             }
         });
@@ -582,6 +585,9 @@ socket.on('player-kicked', (data) => {
 // Leave room event
 socket.on('left-room', () => {
     console.log('Successfully left room');
+    
+    // Clear ALL storage completely
+    localStorage.clear();
     
     // Clear session and return to login
     clearSession();
@@ -1089,6 +1095,40 @@ function checkAndRestoreSession() {
             }
         }
         
+        // Check if player voluntarily left the room recently
+        const leftRoomFlag = sessionStorage.getItem('voluntarily-left-room');
+        const leftRoomTimestamp = sessionStorage.getItem('left-room-timestamp');
+        
+        console.log('Voluntary leave check:', {
+            flag: leftRoomFlag,
+            timestamp: leftRoomTimestamp,
+            currentTime: Date.now()
+        });
+        
+        if (leftRoomFlag === 'true') {
+            console.log('Player voluntarily left room, checking if still valid...');
+            
+            // Keep the flag for 1 hour after leaving to prevent auto-rejoin
+            if (leftRoomTimestamp) {
+                const leftAge = Date.now() - parseInt(leftRoomTimestamp);
+                const leftAgeMinutes = leftAge / (1000 * 60);
+                console.log(`Left room age: ${leftAgeMinutes.toFixed(2)} minutes`);
+                
+                if (leftAge < 60 * 60 * 1000) { // 1 hour
+                    console.log('Voluntary leave still active (within 1 hour), skipping session restoration');
+                    return false;
+                } else {
+                    console.log('Voluntary leave expired after 1 hour, clearing flags');
+                    sessionStorage.removeItem('voluntarily-left-room');
+                    sessionStorage.removeItem('left-room-timestamp');
+                }
+            } else {
+                // If no timestamp, skip session restoration to be safe
+                console.log('Voluntary leave flag found without timestamp, skipping session restoration for safety');
+                return false;
+            }
+        }
+        
         const savedSession = localStorage.getItem('wordle-session');
         console.log('Raw localStorage data:', savedSession);
         
@@ -1149,8 +1189,25 @@ function clearMasterResetFlags() {
     console.log('Master reset flags manually cleared');
 }
 
-// Make function available globally for debugging
+// Function to manually clear leave room flags (for debugging)
+function clearLeaveRoomFlags() {
+    sessionStorage.removeItem('voluntarily-left-room');
+    sessionStorage.removeItem('left-room-timestamp');
+    console.log('Leave room flags manually cleared');
+}
+
+// Function to clear all session flags (for debugging)
+function clearAllSessionFlags() {
+    clearMasterResetFlags();
+    clearLeaveRoomFlags();
+    localStorage.clear();
+    console.log('All session flags and localStorage cleared');
+}
+
+// Make functions available globally for debugging
 window.clearMasterResetFlags = clearMasterResetFlags;
+window.clearLeaveRoomFlags = clearLeaveRoomFlags;
+window.clearAllSessionFlags = clearAllSessionFlags;
 
 // Save basic session to localStorage (server handles game state)
 function saveBasicSession() {
