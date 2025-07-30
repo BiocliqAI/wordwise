@@ -55,6 +55,12 @@ let currentCol = 0;
 let gameOver = false;
 let won = false;
 
+// Commentary system variables
+let commentaryEnabled = true;
+let lastCommentaryTime = 0;
+let commentaryQueue = [];
+let playerStats = new Map(); // Track individual player statistics
+
 // Initialize game
 function initGame() {
     try {
@@ -333,6 +339,9 @@ socket.on('game-state', (state) => {
     try {
         console.log('Received game-state:', state);
         
+        // Store previous state for commentary analysis
+        const prevGameState = { ...gameState };
+        
         // Preserve current player name before merging state
         const currentPlayerName = gameState.playerName;
         gameState = { ...gameState, ...state };
@@ -360,6 +369,11 @@ socket.on('game-state', (state) => {
         
         updateUI();
         
+        // Analyze game state for commentary triggers
+        if (prevGameState.players) {
+            analyzeGameStateForCommentary(prevGameState, gameState);
+        }
+        
         // Save basic session info only (server handles game state)
         if (gameState.playerName && gameState.roomId) {
             saveBasicSession();
@@ -372,11 +386,17 @@ socket.on('game-state', (state) => {
 socket.on('player-joined', (data) => {
     showMessage(`${data.playerName} joined the game`);
     playerCount.textContent = `Players: ${data.playerCount}/5`;
+    
+    // Commentary for new player
+    triggerCommentary('playerJoin', 'welcoming');
 });
 
 socket.on('player-left', (data) => {
     showMessage(`${data.playerName} left the game`);
     playerCount.textContent = `Players: ${data.playerCount}/5`;
+    
+    // Commentary for player leaving
+    triggerCommentary('playerLeave', 'casual');
 });
 
 socket.on('game-started', (state) => {
@@ -392,6 +412,9 @@ socket.on('game-started', (state) => {
     
     showMessage('Game started!');
     updateUI();
+    
+    // Commentary for game start
+    triggerCommentary('gameStart', 'dramatic');
 });
 
 socket.on('play-again-triggered', (data) => {
@@ -429,6 +452,10 @@ socket.on('room-full', () => {
 
 socket.on('invalid-guess', (reason) => {
     showMessage(reason, 'error');
+    
+    // Commentary for invalid word attempts
+    updatePlayerStats(socket.id, 'invalidWord');
+    triggerCommentary('invalidWord', 'sarcastic');
 });
 
 socket.on('rejoin-success', (state) => {
@@ -833,6 +860,19 @@ function handleLetter(letter) {
         tile.textContent = letter;
         tile.dataset.state = 'tbd';
         currentCol++;
+        
+        // Track typing speed for commentary
+        if (currentCol === 1) {
+            window.wordStartTime = Date.now();
+        } else if (currentCol === 5) {
+            const typingTime = Date.now() - (window.wordStartTime || Date.now());
+            if (typingTime < 2000) { // Less than 2 seconds for 5 letters
+                updatePlayerStats(socket.id, 'fastTyping');
+                if (Math.random() < 0.3) { // 30% chance to comment
+                    triggerCommentary('fastTyping', 'impressed');
+                }
+            }
+        }
     }
 }
 
@@ -1290,6 +1330,156 @@ window.clearMasterResetFlags = clearMasterResetFlags;
 window.clearLeaveRoomFlags = clearLeaveRoomFlags;
 window.clearAllSessionFlags = clearAllSessionFlags;
 window.forceSessionRestoration = forceSessionRestoration;
+
+// Make commentary functions available globally
+window.closeCommentaryModal = closeCommentaryModal;
+window.triggerCommentary = triggerCommentary;
+
+// Commentary System Functions
+function showCommentaryToast(message, style = 'sarcastic', duration = 3000) {
+    if (!commentaryEnabled) return;
+    
+    // Rate limiting: don't show too many comments too quickly
+    const now = Date.now();
+    if (now - lastCommentaryTime < 2000) return; // Min 2 seconds between comments
+    lastCommentaryTime = now;
+    
+    const toast = document.getElementById('commentary-toast');
+    if (!toast) return;
+    
+    // Clear existing classes and add new style
+    toast.className = `commentary-toast ${style}`;
+    toast.textContent = message;
+    
+    // Show toast
+    setTimeout(() => toast.classList.add('show'), 100);
+    
+    // Hide toast after duration
+    setTimeout(() => {
+        toast.classList.remove('show');
+    }, duration);
+    
+    console.log(`Commentary [${style}]: ${message}`);
+}
+
+function showCommentaryModal(title, message, style = 'celebration') {
+    if (!commentaryEnabled) return;
+    
+    const modal = document.getElementById('commentary-modal');
+    const titleElement = document.getElementById('commentary-modal-title');
+    const messageElement = document.getElementById('commentary-modal-message');
+    
+    if (!modal || !titleElement || !messageElement) return;
+    
+    titleElement.textContent = title;
+    messageElement.textContent = message;
+    
+    modal.style.display = 'flex';
+    setTimeout(() => modal.classList.add('show'), 100);
+    
+    // Auto-close after 4 seconds
+    setTimeout(() => {
+        closeCommentaryModal();
+    }, 4000);
+    
+    console.log(`Commentary Modal: ${title} - ${message}`);
+}
+
+function closeCommentaryModal() {
+    const modal = document.getElementById('commentary-modal');
+    if (modal) {
+        modal.classList.remove('show');
+        setTimeout(() => {
+            modal.style.display = 'none';
+        }, 300);
+    }
+}
+
+function triggerCommentary(situation, preferredStyle = null, isSpecialMoment = false) {
+    if (!commentaryEnabled || !window.getRandomCommentary) return;
+    
+    const comment = window.getRandomCommentary(situation, preferredStyle);
+    if (!comment) return;
+    
+    if (isSpecialMoment) {
+        showCommentaryModal('🎭 Commentary', comment, preferredStyle || 'dramatic');
+    } else {
+        showCommentaryToast(comment, preferredStyle);
+    }
+}
+
+// Player statistics tracking
+function updatePlayerStats(playerId, action, data = {}) {
+    if (!playerStats.has(playerId)) {
+        playerStats.set(playerId, {
+            invalidAttempts: 0,
+            closeGuesses: 0,
+            correctLetters: 0,
+            gamesPlayed: 0,
+            fastTyping: 0,
+            slowTyping: 0,
+            lastActionTime: 0
+        });
+    }
+    
+    const stats = playerStats.get(playerId);
+    const now = Date.now();
+    
+    switch (action) {
+        case 'invalidWord':
+            stats.invalidAttempts++;
+            break;
+        case 'closeGuess':
+            stats.closeGuesses++;
+            break;
+        case 'correctLetter':
+            stats.correctLetters++;
+            break;
+        case 'fastTyping':
+            stats.fastTyping++;
+            break;
+        case 'slowTyping':
+            stats.slowTyping++;
+            break;
+    }
+    
+    stats.lastActionTime = now;
+}
+
+// Analyze game state for commentary triggers
+function analyzeGameStateForCommentary(prevState, newState) {
+    if (!newState.players || !prevState.players) return;
+    
+    // Check each player for changes
+    Object.keys(newState.players).forEach(playerId => {
+        const prevPlayer = prevState.players[playerId];
+        const newPlayer = newState.players[playerId];
+        
+        if (!prevPlayer || !newPlayer) return;
+        
+        // Check for close guesses (4/5 letters correct)
+        const currentRowIndex = newPlayer.currentRow - 1;
+        if (currentRowIndex >= 0 && newPlayer.colors[currentRowIndex]) {
+            const correctCount = newPlayer.colors[currentRowIndex].filter(color => color === 'green').length;
+            const presentCount = newPlayer.colors[currentRowIndex].filter(color => color === 'yellow').length;
+            
+            if (correctCount === 4) {
+                triggerCommentary('closeGuess', 'encouraging');
+                updatePlayerStats(playerId, 'closeGuess');
+            } else if (correctCount === 1 && prevPlayer.currentRow !== newPlayer.currentRow) {
+                triggerCommentary('firstCorrect', 'encouraging');
+                updatePlayerStats(playerId, 'correctLetter');
+            } else if (presentCount >= 3) {
+                triggerCommentary('multipleYellow', 'observational');
+            }
+        }
+        
+        // Check for wins
+        if (newPlayer.won && !prevPlayer.won) {
+            triggerCommentary('playerWin', 'celebration', true);
+        }
+    });
+}
 
 // Save basic session to localStorage (server handles game state)
 function saveBasicSession() {

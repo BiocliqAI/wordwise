@@ -834,6 +834,156 @@ body {
     }
 }
 
+/* Commentary System */
+.commentary-toast {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(135deg, #ff6b6b, #ee5a52);
+    color: white;
+    padding: 12px 20px;
+    border-radius: 25px;
+    font-size: 14px;
+    font-weight: 500;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    z-index: 1001;
+    max-width: 90vw;
+    text-align: center;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateX(-50%) translateY(-20px);
+    transition: all 0.3s ease;
+}
+
+.commentary-toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+.commentary-toast.sarcastic {
+    background: linear-gradient(135deg, #ff6b6b, #ee5a52);
+}
+
+.commentary-toast.encouraging {
+    background: linear-gradient(135deg, #6aaa64, #5a9a54);
+}
+
+.commentary-toast.dramatic {
+    background: linear-gradient(135deg, #9b59b6, #8e44ad);
+}
+
+.commentary-toast.observational {
+    background: linear-gradient(135deg, #3498db, #2980b9);
+}
+
+.commentary-toast.impressed {
+    background: linear-gradient(135deg, #f39c12, #e67e22);
+}
+
+.commentary-toast.celebration {
+    background: linear-gradient(135deg, #e74c3c, #c0392b);
+    animation: celebration-pulse 0.6s ease-in-out;
+}
+
+.commentary-toast.welcoming {
+    background: linear-gradient(135deg, #1abc9c, #16a085);
+}
+
+.commentary-toast.casual {
+    background: linear-gradient(135deg, #95a5a6, #7f8c8d);
+}
+
+@keyframes celebration-pulse {
+    0%, 100% { transform: translateX(-50%) translateY(0) scale(1); }
+    50% { transform: translateX(-50%) translateY(0) scale(1.05); }
+}
+
+/* Commentary Modal for Special Moments */
+.commentary-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.8);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1002;
+    padding: 20px;
+}
+
+.commentary-modal-content {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 15px;
+    padding: 30px;
+    text-align: center;
+    max-width: 400px;
+    width: 100%;
+    color: white;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    transform: scale(0.8);
+    opacity: 0;
+    transition: all 0.3s ease;
+}
+
+.commentary-modal.show .commentary-modal-content {
+    transform: scale(1);
+    opacity: 1;
+}
+
+.commentary-modal h2 {
+    font-size: 24px;
+    margin-bottom: 15px;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.commentary-modal p {
+    font-size: 16px;
+    line-height: 1.4;
+    margin-bottom: 20px;
+}
+
+.commentary-modal .close-btn {
+    background: rgba(255, 255, 255, 0.2);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 25px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.3s ease;
+}
+
+.commentary-modal .close-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: scale(1.05);
+}
+
+/* Mobile adjustments for commentary */
+@media (max-width: 768px) {
+    .commentary-toast {
+        top: 10px;
+        font-size: 13px;
+        padding: 10px 16px;
+        max-width: 95vw;
+    }
+    
+    .commentary-modal-content {
+        padding: 20px;
+        margin: 20px;
+    }
+    
+    .commentary-modal h2 {
+        font-size: 20px;
+    }
+    
+    .commentary-modal p {
+        font-size: 14px;
+    }
+}
+
 /* Reduced motion support */
 @media (prefers-reduced-motion: reduce) {
     .board-tile,

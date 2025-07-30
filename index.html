@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#121213">
     <title>WordWise - Multiplayer Wordle</title>
-    <link rel="stylesheet" href="styles.css?v=2024073102">
+    <link rel="stylesheet" href="styles.css?v=2024073103">
     <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
@@ -77,9 +77,22 @@
                 <button id="play-again-btn" class="btn">Play Again</button>
             </div>
         </div>
+        
+        <!-- Commentary System -->
+        <div id="commentary-toast" class="commentary-toast"></div>
+        
+        <!-- Commentary Modal for Special Moments -->
+        <div id="commentary-modal" class="commentary-modal">
+            <div class="commentary-modal-content">
+                <h2 id="commentary-modal-title">🎭</h2>
+                <p id="commentary-modal-message"></p>
+                <button class="close-btn" onclick="closeCommentaryModal()">Got it!</button>
+            </div>
+        </div>
     </div>
 
-    <script src="words.js?v=2024073102"></script>
-    <script src="multiplayer.js?v=2024073102"></script>
+    <script src="words.js?v=2024073103"></script>
+    <script src="commentary.js?v=2024073103"></script>
+    <script src="multiplayer.js?v=2024073103"></script>
 </body>
 </html>
