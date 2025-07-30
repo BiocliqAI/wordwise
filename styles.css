@@ -727,6 +727,18 @@ body {
     background-color: #ff5252;
 }
 
+/* Game Controls */
+.game-controls {
+    display: flex;
+    justify-content: center;
+    margin-top: 20px;
+    padding: 10px;
+}
+
+.game-controls .leave-btn {
+    margin-right: 0; /* Remove margin since it's centered now */
+}
+
 /* Animations */
 @keyframes pop {
     0% {

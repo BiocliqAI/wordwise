@@ -736,7 +736,7 @@ function createPlayerCard(player, isCurrentPlayer) {
     
     const name = document.createElement('div');
     name.className = 'player-name';
-    name.textContent = player.name + (isCurrentPlayer ? ' (You)' : '');
+    name.textContent = `${player.name} ${isCurrentPlayer ? '(You)' : ''}, wins: ${player.wins || 0}`;
     
     const status = document.createElement('div');
     status.className = 'player-status';
@@ -935,29 +935,69 @@ function playWinSound() {
     try {
         const audioContext = new (window.AudioContext || window.webkitAudioContext)();
         
-        // Play a celebratory melody
-        const frequencies = [523, 659, 784, 1047]; // C, E, G, C (major chord)
+        // Play a more elaborate celebratory melody
+        const melody = [
+            { freq: 523, time: 0.0, duration: 0.2 },  // C
+            { freq: 659, time: 0.15, duration: 0.2 }, // E
+            { freq: 784, time: 0.3, duration: 0.2 },  // G
+            { freq: 1047, time: 0.45, duration: 0.3 }, // C (higher)
+            { freq: 880, time: 0.6, duration: 0.2 },  // A
+            { freq: 1047, time: 0.75, duration: 0.4 }, // C (sustain)
+            // Add harmony
+            { freq: 523, time: 0.45, duration: 0.6 },  // C harmony
+            { freq: 659, time: 0.45, duration: 0.6 },  // E harmony
+        ];
         
-        frequencies.forEach((freq, index) => {
+        melody.forEach((note) => {
             const oscillator = audioContext.createOscillator();
             const gainNode = audioContext.createGain();
             
             oscillator.connect(gainNode);
             gainNode.connect(audioContext.destination);
             
-            oscillator.frequency.setValueAtTime(freq, audioContext.currentTime);
+            oscillator.frequency.setValueAtTime(note.freq, audioContext.currentTime);
             oscillator.type = 'triangle';
             
-            const startTime = audioContext.currentTime + (index * 0.15);
-            const duration = 0.4;
+            const startTime = audioContext.currentTime + note.time;
+            const endTime = startTime + note.duration;
             
             gainNode.gain.setValueAtTime(0, startTime);
-            gainNode.gain.linearRampToValueAtTime(0.15, startTime + 0.02);
-            gainNode.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+            gainNode.gain.linearRampToValueAtTime(0.1, startTime + 0.02);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, endTime);
             
             oscillator.start(startTime);
-            oscillator.stop(startTime + duration);
+            oscillator.stop(endTime);
         });
+        
+        // Add a celebratory drum-like sound
+        setTimeout(() => {
+            try {
+                const drumContext = new (window.AudioContext || window.webkitAudioContext)();
+                for (let i = 0; i < 3; i++) {
+                    const oscillator = drumContext.createOscillator();
+                    const gainNode = drumContext.createGain();
+                    
+                    oscillator.connect(gainNode);
+                    gainNode.connect(drumContext.destination);
+                    
+                    oscillator.frequency.setValueAtTime(100, drumContext.currentTime);
+                    oscillator.type = 'sawtooth';
+                    
+                    const startTime = drumContext.currentTime + (i * 0.1);
+                    const duration = 0.05;
+                    
+                    gainNode.gain.setValueAtTime(0, startTime);
+                    gainNode.gain.linearRampToValueAtTime(0.2, startTime + 0.01);
+                    gainNode.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+                    
+                    oscillator.start(startTime);
+                    oscillator.stop(startTime + duration);
+                }
+            } catch (error) {
+                console.log('Could not play drum sound:', error);
+            }
+        }, 500);
+        
     } catch (error) {
         console.log('Could not play win sound:', error);
     }

@@ -69,7 +69,8 @@ class GameRoom {
       currentCol: 0,
       gameOver: false,
       won: false,
-      connected: true
+      connected: true,
+      wins: 0 // Add win counter
     };
 
     this.players.set(socketId, player);
@@ -124,6 +125,7 @@ class GameRoom {
     if (guess.toLowerCase() === word.toLowerCase()) {
       player.won = true;
       player.gameOver = true;
+      player.wins += 1; // Increment win counter
       this.winner = player.name;
       this.gameActive = false;
     } else if (player.currentRow >= 6) {
@@ -168,7 +170,8 @@ class GameRoom {
         colors: player.colors,
         currentRow: player.currentRow,
         gameOver: player.gameOver,
-        won: player.won
+        won: player.won,
+        wins: player.wins || 0 // Include win count
       };
     });
 
@@ -203,6 +206,7 @@ class GameRoom {
       player.currentCol = 0;
       player.gameOver = false;
       player.won = false;
+      // Keep win count - don't reset it
     });
   }
 }
@@ -224,7 +228,11 @@ function loadSavedRooms() {
         
         // Restore players
         Object.entries(roomData.players).forEach(([socketId, playerData]) => {
-          room.players.set(socketId, { ...playerData, connected: false });
+          room.players.set(socketId, { 
+            ...playerData, 
+            connected: false,
+            wins: playerData.wins || 0 // Ensure win count is restored
+          });
         });
         
         gameRooms.set(roomId, room);
@@ -251,7 +259,8 @@ function saveRoomsToFile() {
           currentRow: player.currentRow,
           currentCol: player.currentCol,
           gameOver: player.gameOver,
-          won: player.won
+          won: player.won,
+          wins: player.wins || 0 // Include win count in save
         };
       });
       
@@ -383,7 +392,8 @@ io.on('connection', (socket) => {
       console.log('Found existing player data, restoring...', {
         name: existingPlayer.name,
         currentRow: existingPlayer.currentRow,
-        boardHasData: existingPlayer.board.some(row => row.some(cell => cell !== ''))
+        boardHasData: existingPlayer.board.some(row => row.some(cell => cell !== '')),
+        wins: existingPlayer.wins || 0
       });
       
       // Update player connection status and socket ID
@@ -392,6 +402,7 @@ io.on('connection', (socket) => {
       }
       existingPlayer.id = socket.id;
       existingPlayer.connected = true;
+      existingPlayer.wins = existingPlayer.wins || 0; // Ensure win count exists
       delete existingPlayer.disconnectedAt;
       room.players.set(socket.id, existingPlayer);
       
