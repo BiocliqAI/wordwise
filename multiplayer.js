@@ -450,9 +450,17 @@ socket.on('rejoin-success', (state) => {
         
         console.log('Rejoin - Updated gameState.playerName:', gameState.playerName);
         
-        // Force transition to game screen
+        // Force transition to game screen with detailed logging
+        console.log('Before screen transition:');
+        console.log('- loginScreen has active class:', loginScreen.classList.contains('active'));
+        console.log('- gameScreen has active class:', gameScreen.classList.contains('active'));
+        
         loginScreen.classList.remove('active');
         gameScreen.classList.add('active');
+        
+        console.log('After screen transition:');
+        console.log('- loginScreen has active class:', loginScreen.classList.contains('active'));
+        console.log('- gameScreen has active class:', gameScreen.classList.contains('active'));
         
         // Initialize the game
         initGame();
@@ -1194,7 +1202,8 @@ function checkAndRestoreSession() {
             
             // Check if session is still valid (not too old)
             const sessionAge = Date.now() - session.timestamp;
-            console.log('Session age (hours):', sessionAge / (1000 * 60 * 60));
+            const sessionAgeHours = sessionAge / (1000 * 60 * 60);
+            console.log(`Session age: ${sessionAgeHours.toFixed(2)} hours (${sessionAge} ms)`);
             
             if (sessionAge < 24 * 60 * 60 * 1000) { // 24 hours
                 console.log('Session valid, restoring...');
@@ -1260,10 +1269,27 @@ function clearAllSessionFlags() {
     console.log('All session flags and localStorage cleared');
 }
 
+// Force session restoration (for debugging/testing)
+function forceSessionRestoration() {
+    console.log('=== FORCING SESSION RESTORATION ===');
+    
+    // Clear any blocking flags
+    sessionStorage.removeItem('master-reset-performed');
+    sessionStorage.removeItem('master-reset-timestamp');
+    sessionStorage.removeItem('voluntarily-left-room');
+    sessionStorage.removeItem('left-room-timestamp');
+    
+    // Run the restoration check
+    const restored = checkAndRestoreSession();
+    console.log('Force restoration result:', restored);
+    return restored;
+}
+
 // Make functions available globally for debugging
 window.clearMasterResetFlags = clearMasterResetFlags;
 window.clearLeaveRoomFlags = clearLeaveRoomFlags;
 window.clearAllSessionFlags = clearAllSessionFlags;
+window.forceSessionRestoration = forceSessionRestoration;
 
 // Save basic session to localStorage (server handles game state)
 function saveBasicSession() {
