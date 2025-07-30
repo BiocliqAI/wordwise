@@ -893,6 +893,11 @@ body {
 .commentary-toast.casual {
     background: linear-gradient(135deg, #95a5a6, #7f8c8d);
 }
+.commentary-toast.ai {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    border: 2px solid #4f46e5;
+    box-shadow: 0 0 20px rgba(102, 126, 234, 0.3);
+}
 
 @keyframes celebration-pulse {
     0%, 100% { transform: translateX(-50%) translateY(0) scale(1); }

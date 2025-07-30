@@ -646,6 +646,14 @@ socket.on('left-room', () => {
     showMessage('You have left the room', 'success');
 });
 
+// AI Commentary event handler
+socket.on('commentary', (data) => {
+    console.log('AI Commentary received:', data);
+    if (data.message) {
+        showCommentaryToast(data.message, data.style || 'ai', 4000);
+    }
+});
+
 // Update UI based on game state
 function updateUI() {
     // Update room info

@@ -4,6 +4,9 @@ const socketIo = require('socket.io');
 const cors = require('cors');
 const path = require('path');
 
+// Load environment variables
+require('dotenv').config();
+
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
@@ -35,6 +38,208 @@ const { TARGET_WORDS, FINAL_VALID_GUESSES } = require('./words.js');
 // Debug word lists
 console.log('TARGET_WORDS loaded:', TARGET_WORDS?.length || 0);
 console.log('FINAL_VALID_GUESSES loaded:', FINAL_VALID_GUESSES?.length || 0);
+
+// Check API configuration
+console.log('Kimi API configured:', !!process.env.KIMI_API_KEY);
+console.log('Commentary AI enabled:', process.env.COMMENTARY_AI_ENABLED === 'true');
+
+// AI Commentary system
+const https = require('https');
+
+async function generateAICommentary(situation, gameContext) {
+  if (process.env.COMMENTARY_AI_ENABLED !== 'true' || !process.env.KIMI_API_KEY) {
+    return null;
+  }
+
+  try {
+    const prompt = createCommentaryPrompt(situation, gameContext);
+    
+    const requestData = JSON.stringify({
+      model: process.env.KIMI_MODEL || 'moonshot-v1-8k',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a witty, cheeky game commentator for a multiplayer Wordle game. Provide short, entertaining commentary (max 15 words) without revealing the answer or giving hints. Be playful and engaging.'
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+      temperature: 0.8,
+      max_tokens: 50
+    });
+
+    const options = {
+      hostname: 'api.moonshot.cn',
+      port: 443,
+      path: '/v1/chat/completions',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.KIMI_API_KEY}`,
+        'Content-Length': Buffer.byteLength(requestData)
+      }
+    };
+
+    return new Promise((resolve, reject) => {
+      const req = https.request(options, (res) => {
+        let data = '';
+        
+        res.on('data', (chunk) => {
+          data += chunk;
+        });
+        
+        res.on('end', () => {
+          try {
+            const response = JSON.parse(data);
+            if (response.choices && response.choices[0]) {
+              const commentary = response.choices[0].message.content.trim();
+              console.log('AI Commentary generated:', commentary);
+              resolve(commentary);
+            } else {
+              console.log('No AI commentary in response');
+              resolve(null);
+            }
+          } catch (error) {
+            console.error('Error parsing AI response:', error);
+            resolve(null);
+          }
+        });
+      });
+
+      req.on('error', (error) => {
+        console.error('AI Commentary request error:', error);
+        resolve(null);
+      });
+
+      req.setTimeout(5000, () => {
+        req.destroy();
+        console.log('AI Commentary request timeout');
+        resolve(null);
+      });
+
+      req.write(requestData);
+      req.end();
+    });
+  } catch (error) {
+    console.error('AI Commentary generation error:', error);
+    return null;
+  }
+}
+
+function createCommentaryPrompt(situation, gameContext) {
+  const { playerName, attempts, isWin, totalPlayers, gameProgress } = gameContext;
+  
+  const prompts = {
+    invalidWord: `Player ${playerName} tried an invalid word on attempt ${attempts}. Make a witty comment about their spelling creativity.`,
+    closeGuess: `Player ${playerName} made a close guess with some correct letters on attempt ${attempts}. Comment on their progress.`,
+    firstCorrect: `Player ${playerName} got their first letter in the right position on attempt ${attempts}. Celebrate this milestone.`,
+    gameWon: `Player ${playerName} won the game in ${attempts} attempts out of ${totalPlayers} players. Make a victory comment.`,
+    lastAttempt: `Player ${playerName} is on their final attempt (${attempts}/6). Create tension without giving hints.`,
+    gameLost: `Player ${playerName} failed to guess the word in 6 attempts. Console them humorously.`,
+    multipleCorrect: `Player ${playerName} got multiple letters right on attempt ${attempts}. Comment on their improving skills.`,
+    noProgress: `Player ${playerName} on attempt ${attempts} with little progress. Make an encouraging but cheeky remark.`
+  };
+
+  return prompts[situation] || `Comment on player ${playerName}'s gameplay on attempt ${attempts}.`;
+}
+
+// Commentary generation helpers
+async function generateCommentaryForGuess(roomId, player, result, room) {
+  try {
+    const situation = analyzeSituation(player, result, room);
+    const gameContext = {
+      playerName: player.name,
+      attempts: player.currentRow,
+      isWin: result.won,
+      totalPlayers: room.players.size,
+      gameProgress: calculateGameProgress(player)
+    };
+
+    // 20% chance for AI commentary, 80% pre-generated
+    const useAI = Math.random() < (parseFloat(process.env.COMMENTARY_AI_CHANCE) || 0.2);
+    
+    let commentary = null;
+    let style = 'sarcastic';
+    
+    if (useAI) {
+      commentary = await generateAICommentary(situation, gameContext);
+      style = 'ai';
+    }
+    
+    if (commentary) {
+      // Broadcast AI commentary to all players in room
+      io.to(roomId).emit('commentary', {
+        message: commentary,
+        style: style,
+        playerName: player.name,
+        situation: situation
+      });
+    }
+  } catch (error) {
+    console.error('Error generating commentary for guess:', error);
+  }
+}
+
+async function generateCommentaryForInvalidWord(roomId, player) {
+  try {
+    const gameContext = {
+      playerName: player.name,
+      attempts: player.currentRow + 1,
+      isWin: false,
+      totalPlayers: 1,
+      gameProgress: 'invalid'
+    };
+
+    // 20% chance for AI commentary
+    const useAI = Math.random() < (parseFloat(process.env.COMMENTARY_AI_CHANCE) || 0.2);
+    
+    let commentary = null;
+    let style = 'sarcastic';
+    
+    if (useAI) {
+      commentary = await generateAICommentary('invalidWord', gameContext);
+      style = 'ai';
+    }
+    
+    if (commentary) {
+      // Broadcast AI commentary to all players in room
+      io.to(roomId).emit('commentary', {
+        message: commentary,
+        style: style,
+        playerName: player.name,
+        situation: 'invalidWord'
+      });
+    }
+  } catch (error) {
+    console.error('Error generating commentary for invalid word:', error);
+  }
+}
+
+function analyzeSituation(player, result, room) {
+  if (result.won) return 'gameWon';
+  if (player.currentRow >= 6) return 'gameLost';
+  if (player.currentRow === 5) return 'lastAttempt';
+  
+  // Analyze colors to determine situation
+  const colors = result.colors;
+  const greenCount = colors.filter(c => c === 'green').length;
+  const yellowCount = colors.filter(c => c === 'yellow').length;
+  
+  if (greenCount === 0 && yellowCount === 0) return 'noProgress';
+  if (greenCount === 1 && player.currentRow === 1) return 'firstCorrect';
+  if (greenCount >= 2 || (greenCount >= 1 && yellowCount >= 2)) return 'multipleCorrect';
+  if (greenCount >= 1 || yellowCount >= 2) return 'closeGuess';
+  
+  return 'noProgress';
+}
+
+function calculateGameProgress(player) {
+  const totalCells = player.currentRow * 5;
+  const filledCells = player.board.slice(0, player.currentRow).flat().filter(cell => cell !== '').length;
+  return filledCells / Math.max(totalCells, 1);
+}
 
 // Game state
 const gameRooms = new Map();
@@ -436,9 +641,14 @@ io.on('connection', (socket) => {
     if (!room) return;
 
     const result = room.makeGuess(socket.id, guess);
+    const player = room.players.get(socket.id);
+    
     if (result.valid) {
       // Broadcast updated game state to all players
       io.to(socket.roomId).emit('game-state', room.getGameState());
+      
+      // Generate commentary (async but don't wait)
+      generateCommentaryForGuess(socket.roomId, player, result, room);
       
       // Save game state to file
       saveRoomsToFile();
@@ -466,6 +676,9 @@ io.on('connection', (socket) => {
       }
     } else {
       socket.emit('invalid-guess', result.reason);
+      
+      // Generate commentary for invalid word
+      generateCommentaryForInvalidWord(socket.roomId, player);
     }
   });
 
