@@ -637,6 +637,12 @@ function updateGameBoard() {
     console.log('Updating game board for player:', currentPlayer.name);
     console.log('Player board state:', currentPlayer.board);
     console.log('Player colors state:', currentPlayer.colors);
+    console.log('Player currentRow from server:', currentPlayer.currentRow);
+    
+    // Debug: Log the exact data we're trying to display
+    for (let r = 0; r < Math.min(currentPlayer.currentRow, 6); r++) {
+        console.log(`Row ${r}: board=`, currentPlayer.board[r], 'colors=', currentPlayer.colors[r]);
+    }
     
     // Update tiles
     for (let row = 0; row < 6; row++) {
@@ -651,16 +657,24 @@ function updateGameBoard() {
             
             tile.textContent = letter;
             
+            // Debug: Show what we're about to do
+            console.log(`Tile [${row}][${col}]: letter="${letter}", color="${color}", current_state="${tile.dataset.state}"`);
+            
             if (color === 'green') {
                 tile.dataset.state = 'correct';
+                console.log(`✅ Set tile [${row}][${col}] to CORRECT (green) - final state: ${tile.dataset.state}`);
             } else if (color === 'yellow') {
                 tile.dataset.state = 'present';
+                console.log(`🟡 Set tile [${row}][${col}] to PRESENT (yellow) - final state: ${tile.dataset.state}`);
             } else if (color === 'gray') {
                 tile.dataset.state = 'absent';
+                console.log(`⚫ Set tile [${row}][${col}] to ABSENT (gray) - final state: ${tile.dataset.state}`);
             } else if (letter) {
                 tile.dataset.state = 'tbd';
+                console.log(`❓ Set tile [${row}][${col}] to TBD (has letter "${letter}" but no color) - final state: ${tile.dataset.state}`);
             } else {
                 tile.dataset.state = 'empty';
+                console.log(`⬜ Set tile [${row}][${col}] to EMPTY - final state: ${tile.dataset.state}`);
             }
         }
     }
@@ -673,6 +687,8 @@ function updateGameBoard() {
     won = currentPlayer.won;
     currentRow = currentPlayer.currentRow;
     currentCol = 0;
+    
+    console.log(`Game state updated: currentRow=${currentRow}, currentCol=${currentCol}, gameOver=${gameOver}, won=${won}`);
 }
 
 // Update keyboard colors
