@@ -292,20 +292,24 @@ class GameRoom {
     }
   }
 
-  // Clean up truly disconnected players (not used for over 24 hours)
+  // Clean up truly disconnected players (more aggressive cleanup)
   cleanupDisconnectedPlayers() {
     const now = Date.now();
     const disconnectedPlayers = [];
     
     this.players.forEach((player, socketId) => {
-      if (!player.connected && (now - player.disconnectedAt) > 24 * 60 * 60 * 1000) {
+      // Clean up players disconnected for more than 10 minutes (instead of 24 hours)
+      // or players without a disconnectedAt timestamp
+      if (!player.connected && 
+          (!player.disconnectedAt || (now - player.disconnectedAt) > 10 * 60 * 1000)) {
         disconnectedPlayers.push(socketId);
       }
     });
     
     disconnectedPlayers.forEach(socketId => {
+      const player = this.players.get(socketId);
       this.players.delete(socketId);
-      console.log(`Cleaned up old disconnected player: ${socketId}`);
+      console.log(`Cleaned up disconnected player: ${player?.name || 'unknown'} (${socketId})`);
     });
   }
 
@@ -502,18 +506,21 @@ io.on('connection', (socket) => {
       gameRooms.set(roomId, room);
     }
 
-    // Check if player name already exists in the room
+    // Clean up disconnected players before checking for name conflicts
+    room.cleanupDisconnectedPlayers();
+
+    // Check if player name already exists in the room (only check connected players)
     let existingPlayerSocketId = null;
     for (const [socketId, player] of room.players) {
-      if (player.name === playerName) {
+      if (player.name === playerName && player.connected) {
         existingPlayerSocketId = socketId;
         break;
       }
     }
 
-    // If player name exists, kick out the existing player
+    // If player name exists and is connected, kick out the existing player
     if (existingPlayerSocketId) {
-      console.log(`Kicking out existing player with name "${playerName}" (socket: ${existingPlayerSocketId})`);
+      console.log(`Kicking out existing connected player with name "${playerName}" (socket: ${existingPlayerSocketId})`);
       
       // Get the existing socket and disconnect it
       const existingSocket = io.sockets.sockets.get(existingPlayerSocketId);
@@ -526,6 +533,18 @@ io.on('connection', (socket) => {
       
       // Remove the existing player from the room
       room.players.delete(existingPlayerSocketId);
+    } else if (existingPlayerSocketId === null) {
+      // Check for disconnected players with same name and remove them
+      const playersToRemove = [];
+      for (const [socketId, player] of room.players) {
+        if (player.name === playerName && !player.connected) {
+          playersToRemove.push(socketId);
+        }
+      }
+      playersToRemove.forEach(socketId => {
+        console.log(`Removing disconnected player with same name: ${playerName} (${socketId})`);
+        room.players.delete(socketId);
+      });
     }
 
     if (room.addPlayer(socket.id, playerName)) {
@@ -543,6 +562,9 @@ io.on('connection', (socket) => {
         playerName,
         playerCount: room.players.size
       });
+
+      // Broadcast updated game state to ensure all players see the new player
+      io.to(roomId).emit('game-state', room.getGameState());
 
       // Start game if we have at least 1 player and game isn't active (changed for testing)
       if (room.players.size >= 1 && !room.gameActive) {
@@ -562,24 +584,14 @@ io.on('connection', (socket) => {
     const room = gameRooms.get(roomId);
     
     if (!room) {
-      console.log('Room not found for rejoin, creating new room and joining');
-      // Create new room and add player
-      const newRoom = new GameRoom(roomId);
-      gameRooms.set(roomId, newRoom);
-      
-      if (newRoom.addPlayer(socket.id, playerName)) {
-        socket.join(roomId);
-        socket.roomId = roomId;
-        socket.playerName = playerName;
-        socket.emit('game-state', newRoom.getGameState());
-        
-        if (newRoom.players.size >= 1 && !newRoom.gameActive) {
-          newRoom.resetGame(false);
-          io.to(roomId).emit('game-started', newRoom.getGameState());
-        }
-      }
+      console.log('Room not found for rejoin, treating as new join');
+      // Emit join-room event instead to handle as new player
+      socket.emit('rejoin-failed', { reason: 'Room not found' });
       return;
     }
+
+    // Clean up disconnected players before processing rejoin
+    room.cleanupDisconnectedPlayers();
 
     // Look for existing player data by name
     let existingPlayer = null;

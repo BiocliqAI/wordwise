@@ -499,6 +499,27 @@ socket.on('rejoin-success', (state) => {
     }
 });
 
+socket.on('rejoin-failed', (data) => {
+    console.log('Rejoin failed:', data.reason);
+    
+    // Clear session data since rejoin failed
+    localStorage.removeItem('wordle-session');
+    
+    // Show login screen
+    loginScreen.classList.add('active');
+    gameScreen.classList.remove('active');
+    
+    // Reset game state
+    gameState = {
+        roomId: null,
+        playerName: null,
+        players: {},
+        gameActive: false,
+        winner: null,
+        currentWord: null
+    };
+});
+
 socket.on('master-reset-complete', () => {
     try {
         console.log('Master reset complete - clearing all local data');
@@ -1172,6 +1193,14 @@ document.addEventListener('DOMContentLoaded', () => {
 function checkAndRestoreSession() {
     console.log('=== SESSION RESTORATION CHECK ===');
     console.log('Checking for existing session...');
+    
+    // If user is manually logging in (login screen is active and form has focus), skip restoration
+    if (loginScreen.classList.contains('active') && 
+        document.activeElement === playerNameInput && 
+        playerNameInput.value.trim() !== '') {
+        console.log('User is actively logging in, skipping session restoration');
+        return false;
+    }
     try {
         // Check if master reset was recently performed
         const masterResetFlag = sessionStorage.getItem('master-reset-performed');
@@ -1241,6 +1270,14 @@ function checkAndRestoreSession() {
             }
         }
         
+        // Check if this is a brand new session (user just opened a new tab/window)
+        const isNewSession = !sessionStorage.getItem('session-initialized');
+        if (isNewSession) {
+            console.log('Brand new session detected, skipping restoration to avoid conflicts');
+            sessionStorage.setItem('session-initialized', 'true');
+            return false;
+        }
+
         const savedSession = localStorage.getItem('wordle-session');
         console.log('Raw localStorage data:', savedSession);
         
@@ -1261,19 +1298,23 @@ function checkAndRestoreSession() {
                 // Wait for socket to connect before rejoining
                 if (socket.connected) {
                     console.log('Socket already connected, rejoining immediately...');
-                    socket.emit('rejoin-room', { 
-                        roomId: session.roomId, 
-                        playerName: session.playerName 
-                    });
+                    setTimeout(() => {
+                        socket.emit('rejoin-room', { 
+                            roomId: session.roomId, 
+                            playerName: session.playerName 
+                        });
+                    }, 100); // Small delay to ensure socket is fully ready
                 } else {
                     console.log('Socket not connected yet, waiting...');
-                    socket.on('connect', () => {
+                    const rejoinHandler = () => {
                         console.log('Socket connected, now rejoining...');
                         socket.emit('rejoin-room', { 
                             roomId: session.roomId, 
                             playerName: session.playerName 
                         });
-                    });
+                        socket.off('connect', rejoinHandler); // Remove listener after use
+                    };
+                    socket.on('connect', rejoinHandler);
                 }
                 
                 // Pre-fill the name in case rejoin fails
