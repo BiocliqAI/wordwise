@@ -55,6 +55,14 @@ let currentCol = 0;
 let gameOver = false;
 let won = false;
 
+// Client-side input buffer to prevent auto-erasure
+let clientInputBuffer = {
+    hasActiveInput: false,
+    row: 0,
+    letters: [],
+    lastInputTime: 0
+};
+
 // Commentary system variables
 let commentaryEnabled = true;
 let lastCommentaryTime = 0;
@@ -407,6 +415,10 @@ socket.on('game-started', (state) => {
     currentCol = 0;
     resetGameBtn.style.display = 'none';
     
+    // Clear input buffer for new game
+    clientInputBuffer.hasActiveInput = false;
+    clientInputBuffer.letters = [];
+    
     // Clear keyboard colors for new game
     clearKeyboardColors();
     
@@ -749,8 +761,32 @@ function updateGameBoard() {
     // Update game state
     gameOver = currentPlayer.gameOver;
     won = currentPlayer.won;
-    currentRow = currentPlayer.currentRow;
-    currentCol = 0;
+    
+    // Preserve client input if user is actively typing
+    const now = Date.now();
+    const isActivelyTyping = clientInputBuffer.hasActiveInput && 
+                           (now - clientInputBuffer.lastInputTime < 2000) && // Within 2 seconds
+                           clientInputBuffer.row === currentPlayer.currentRow;
+    
+    if (isActivelyTyping) {
+        console.log('Preserving client input during server update');
+        // Keep current client position and restore typed letters
+        for (let col = 0; col < 5; col++) {
+            const tile = document.querySelector(`[data-row="${clientInputBuffer.row}"][data-col="${col}"]`);
+            if (tile && clientInputBuffer.letters[col]) {
+                tile.textContent = clientInputBuffer.letters[col];
+                tile.dataset.state = 'tbd';
+            }
+        }
+        // Keep current col position
+        currentCol = clientInputBuffer.letters.filter(letter => letter !== '').length;
+    } else {
+        // Use server state
+        currentRow = currentPlayer.currentRow;
+        currentCol = 0;
+        // Clear any stale input buffer
+        clientInputBuffer.hasActiveInput = false;
+    }
     
     console.log(`Game state updated: currentRow=${currentRow}, currentCol=${currentCol}, gameOver=${gameOver}, won=${won}`);
 }
@@ -890,6 +926,13 @@ function handleLetter(letter) {
         tile.dataset.state = 'tbd';
         currentCol++;
         
+        // Update client input buffer to prevent server from overwriting
+        clientInputBuffer.hasActiveInput = true;
+        clientInputBuffer.row = currentRow;
+        clientInputBuffer.letters = Array.from(document.querySelectorAll(`[data-row="${currentRow}"]`))
+            .map(tile => tile.textContent);
+        clientInputBuffer.lastInputTime = Date.now();
+        
         // Track typing speed for commentary
         if (currentCol === 1) {
             window.wordStartTime = Date.now();
@@ -912,6 +955,13 @@ function handleBackspace() {
         const tile = document.querySelector(`[data-row="${currentRow}"][data-col="${currentCol}"]`);
         tile.textContent = '';
         tile.dataset.state = 'empty';
+        
+        // Update client input buffer
+        clientInputBuffer.hasActiveInput = true;
+        clientInputBuffer.row = currentRow;
+        clientInputBuffer.letters = Array.from(document.querySelectorAll(`[data-row="${currentRow}"]`))
+            .map(tile => tile.textContent);
+        clientInputBuffer.lastInputTime = Date.now();
     }
 }
 
@@ -925,6 +975,10 @@ function handleEnter() {
     const guess = Array.from(document.querySelectorAll(`[data-row="${currentRow}"]`))
         .map(tile => tile.textContent)
         .join('');
+    
+    // Clear input buffer since we're submitting the guess
+    clientInputBuffer.hasActiveInput = false;
+    clientInputBuffer.letters = [];
     
     socket.emit('make-guess', { guess: guess.toLowerCase() });
 }
@@ -1215,17 +1269,17 @@ function checkAndRestoreSession() {
         if (masterResetFlag === 'true') {
             console.log('Master reset was performed, checking if still valid...');
             
-            // Keep the flag for 24 hours after master reset to prevent any auto-login
+            // Keep the flag for 1 hour after master reset to prevent immediate auto-login
             if (masterResetTimestamp) {
                 const resetAge = Date.now() - parseInt(masterResetTimestamp);
-                const resetAgeHours = resetAge / (1000 * 60 * 60);
-                console.log(`Master reset age: ${resetAgeHours.toFixed(2)} hours`);
+                const resetAgeMinutes = resetAge / (1000 * 60);
+                console.log(`Master reset age: ${resetAgeMinutes.toFixed(2)} minutes`);
                 
-                if (resetAge < 24 * 60 * 60 * 1000) { // 24 hours
-                    console.log('Master reset still active (within 24 hours), skipping session restoration');
+                if (resetAge < 60 * 60 * 1000) { // 1 hour
+                    console.log('Master reset still active (within 1 hour), skipping session restoration');
                     return false;
                 } else {
-                    console.log('Master reset expired after 24 hours, clearing flags');
+                    console.log('Master reset expired after 1 hour, clearing flags');
                     sessionStorage.removeItem('master-reset-performed');
                     sessionStorage.removeItem('master-reset-timestamp');
                 }
@@ -1249,17 +1303,17 @@ function checkAndRestoreSession() {
         if (leftRoomFlag === 'true') {
             console.log('Player voluntarily left room, checking if still valid...');
             
-            // Keep the flag for 1 hour after leaving to prevent auto-rejoin
+            // Keep the flag for 15 minutes after leaving to prevent immediate auto-rejoin
             if (leftRoomTimestamp) {
                 const leftAge = Date.now() - parseInt(leftRoomTimestamp);
                 const leftAgeMinutes = leftAge / (1000 * 60);
                 console.log(`Left room age: ${leftAgeMinutes.toFixed(2)} minutes`);
                 
-                if (leftAge < 60 * 60 * 1000) { // 1 hour
-                    console.log('Voluntary leave still active (within 1 hour), skipping session restoration');
+                if (leftAge < 15 * 60 * 1000) { // 15 minutes
+                    console.log('Voluntary leave still active (within 15 minutes), skipping session restoration');
                     return false;
                 } else {
-                    console.log('Voluntary leave expired after 1 hour, clearing flags');
+                    console.log('Voluntary leave expired after 15 minutes, clearing flags');
                     sessionStorage.removeItem('voluntarily-left-room');
                     sessionStorage.removeItem('left-room-timestamp');
                 }
@@ -1270,13 +1324,9 @@ function checkAndRestoreSession() {
             }
         }
         
-        // Check if this is a brand new session (user just opened a new tab/window)
-        const isNewSession = !sessionStorage.getItem('session-initialized');
-        if (isNewSession) {
-            console.log('Brand new session detected, skipping restoration to avoid conflicts');
-            sessionStorage.setItem('session-initialized', 'true');
-            return false;
-        }
+        // Always attempt restoration if we have valid session data
+        // Remove the "brand new session" blocker that was preventing refresh restoration
+        sessionStorage.setItem('session-initialized', 'true');
 
         const savedSession = localStorage.getItem('wordle-session');
         console.log('Raw localStorage data:', savedSession);
@@ -1303,18 +1353,33 @@ function checkAndRestoreSession() {
                             roomId: session.roomId, 
                             playerName: session.playerName 
                         });
-                    }, 100); // Small delay to ensure socket is fully ready
+                    }, 200); // Slightly longer delay for stability
                 } else {
                     console.log('Socket not connected yet, waiting...');
+                    // Attempt to connect if not already connecting
+                    if (!socket.connecting) {
+                        socket.connect();
+                    }
+                    
                     const rejoinHandler = () => {
                         console.log('Socket connected, now rejoining...');
-                        socket.emit('rejoin-room', { 
-                            roomId: session.roomId, 
-                            playerName: session.playerName 
-                        });
+                        setTimeout(() => {
+                            socket.emit('rejoin-room', { 
+                                roomId: session.roomId, 
+                                playerName: session.playerName 
+                            });
+                        }, 300); // Extra delay after connection
                         socket.off('connect', rejoinHandler); // Remove listener after use
                     };
                     socket.on('connect', rejoinHandler);
+                    
+                    // Fallback timeout in case connection fails
+                    setTimeout(() => {
+                        if (!socket.connected) {
+                            console.warn('Socket connection timeout during session restoration');
+                            socket.off('connect', rejoinHandler);
+                        }
+                    }, 5000);
                 }
                 
                 // Pre-fill the name in case rejoin fails
