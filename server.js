@@ -784,6 +784,9 @@ io.on('connection', (socket) => {
           playerName,
           playerCount: room.players.size
         });
+        
+        // Send updated game state to refresh player gallery
+        io.to(socket.roomId).emit('game-state', room.getGameState());
       }
       
       // Clear socket room data
@@ -851,6 +854,9 @@ io.on('connection', (socket) => {
         playerName,
         playerCount: room.players.size
       });
+      
+      // Send updated game state to refresh player gallery
+      io.to(socket.roomId).emit('game-state', room.getGameState());
 
       // Don't immediately delete rooms - keep them for rejoining
       if (room.players.size === 0) {

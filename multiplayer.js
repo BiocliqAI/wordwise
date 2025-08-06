@@ -446,7 +446,7 @@ socket.on('game-ended', (data) => {
     }
     
     if (data.winner === gameState.playerName) {
-        showGameOverModal('Congratulations!', 'You won!');
+        showGameOverModal('Congratulations!', `You won! The word was ${data.word.toUpperCase()}`);
     } else if (data.winner) {
         showGameOverModal('Game Over', `${data.winner} won! The word was ${data.word.toUpperCase()}`);
     } else {
@@ -765,11 +765,16 @@ function updateGameBoard() {
     // Preserve client input if user is actively typing
     const now = Date.now();
     const isActivelyTyping = clientInputBuffer.hasActiveInput && 
-                           (now - clientInputBuffer.lastInputTime < 2000) && // Within 2 seconds
-                           clientInputBuffer.row === currentPlayer.currentRow;
+                           (now - clientInputBuffer.lastInputTime < 10000) && // Within 10 seconds (increased from 2)
+                           clientInputBuffer.row === currentPlayer.currentRow &&
+                           clientInputBuffer.letters.some(letter => letter !== ''); // Only if has actual letters
     
     if (isActivelyTyping) {
-        console.log('Preserving client input during server update');
+        console.log('Preserving client input during server update:', {
+            letters: clientInputBuffer.letters,
+            row: clientInputBuffer.row,
+            timeSinceLastInput: now - clientInputBuffer.lastInputTime
+        });
         // Keep current client position and restore typed letters
         for (let col = 0; col < 5; col++) {
             const tile = document.querySelector(`[data-row="${clientInputBuffer.row}"][data-col="${col}"]`);
@@ -785,7 +790,11 @@ function updateGameBoard() {
         currentRow = currentPlayer.currentRow;
         currentCol = 0;
         // Clear any stale input buffer
-        clientInputBuffer.hasActiveInput = false;
+        if (clientInputBuffer.hasActiveInput && (now - clientInputBuffer.lastInputTime >= 10000)) {
+            console.log('Clearing stale input buffer due to timeout');
+            clientInputBuffer.hasActiveInput = false;
+            clientInputBuffer.letters = [];
+        }
     }
     
     console.log(`Game state updated: currentRow=${currentRow}, currentCol=${currentCol}, gameOver=${gameOver}, won=${won}`);
@@ -929,9 +938,16 @@ function handleLetter(letter) {
         // Update client input buffer to prevent server from overwriting
         clientInputBuffer.hasActiveInput = true;
         clientInputBuffer.row = currentRow;
-        clientInputBuffer.letters = Array.from(document.querySelectorAll(`[data-row="${currentRow}"]`))
-            .map(tile => tile.textContent);
+        clientInputBuffer.letters = Array.from(document.querySelectorAll(`[data-row="${currentRow}"] .board-tile`))
+            .map(tile => tile.textContent || '');
         clientInputBuffer.lastInputTime = Date.now();
+        
+        console.log('Input buffer updated after letter input:', {
+            letter: letter,
+            row: currentRow,
+            col: currentCol,
+            letters: clientInputBuffer.letters
+        });
         
         // Track typing speed for commentary
         if (currentCol === 1) {
@@ -959,9 +975,15 @@ function handleBackspace() {
         // Update client input buffer
         clientInputBuffer.hasActiveInput = true;
         clientInputBuffer.row = currentRow;
-        clientInputBuffer.letters = Array.from(document.querySelectorAll(`[data-row="${currentRow}"]`))
-            .map(tile => tile.textContent);
+        clientInputBuffer.letters = Array.from(document.querySelectorAll(`[data-row="${currentRow}"] .board-tile`))
+            .map(tile => tile.textContent || '');
         clientInputBuffer.lastInputTime = Date.now();
+        
+        console.log('Input buffer updated after backspace:', {
+            row: currentRow,
+            col: currentCol,
+            letters: clientInputBuffer.letters
+        });
     }
 }
 
