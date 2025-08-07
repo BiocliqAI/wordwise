@@ -492,6 +492,14 @@ function saveRoomsToFile() {
 // Load saved rooms on startup
 loadSavedRooms();
 
+// Periodically remove players that have been disconnected for more than 24h
+const CLEANUP_INTERVAL = 10 * 60 * 1000; // every 10 minutes
+setInterval(() => {
+  gameRooms.forEach((room) => {
+    room.cleanupDisconnectedPlayers();
+  });
+}, CLEANUP_INTERVAL);
+
 // Socket.IO connection handling
 io.on('connection', (socket) => {
   console.log('New client connected:', socket.id);
